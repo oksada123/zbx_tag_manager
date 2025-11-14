@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Główna</a></li>
+                <li class="breadcrumb-item"><a href="{{ url_for('hosts') }}">Hosty</a></li>
+                <li class="breadcrumb-item active">{{ host.name }}</li>
+            </ol>
+        </nav>
+
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2><i class="fas fa-tags"></i> Tagi dla hosta: {{ host.name }}</h2>
+            <a href="{{ url_for('hosts') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Powrót do listy
+            </a>
+        </div>
+
+        <!-- Informacje o hoście -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5><i class="fas fa-server"></i> Informacje o hoście</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <strong>Nazwa:</strong> {{ host.name }}
+                    </div>
+                    <div class="col-md-3">
+                        <strong>Host:</strong> {{ host.host }}
+                    </div>
+                    <div class="col-md-3">
+                        <strong>ID:</strong> {{ host.hostid }}
+                    </div>
+                    <div class="col-md-3">
+                        <strong>Status:</strong>
+                        {% if host.status == "0" %}
+                            <span class="badge bg-success">Aktywny</span>
+                        {% else %}
+                            <span class="badge bg-danger">Nieaktywny</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Dodawanie nowego tagu -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5><i class="fas fa-plus"></i> Dodaj nowy tag</h5>
+            </div>
+            <div class="card-body">
+                <form id="addTagForm" onsubmit="addTag(event)">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <input type="text" id="newTagName" class="form-control" placeholder="Nazwa tagu" required>
+                        </div>
+                        <div class="col-md-4">
+                            <input type="text" id="newTagValue" class="form-control" placeholder="Wartość tagu (opcjonalna)">
+                        </div>
+                        <div class="col-md-4">
+                            <button type="submit" class="btn btn-success">
+                                <i class="fas fa-plus"></i> Dodaj tag
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Lista obecnych tagów -->
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-list"></i> Obecne tagi</h5>
+            </div>
+            <div class="card-body">
+                {% if host.tags %}
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Nazwa tagu</th>
+                                <th>Wartość</th>
+                                <th>Akcje</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tagsTable">
+                            {% for tag in host.tags %}
+                            <tr id="tag-{{ tag.tag }}">
+                                <td><strong>{{ tag.tag }}</strong></td>
+                                <td>{{ tag.value or '-' }}</td>
+                                <td>
+                                    <button class="btn btn-sm btn-danger" onclick="removeTag('{{ tag.tag }}')">
+                                        <i class="fas fa-trash"></i> Usuń
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i> Ten host nie ma żadnych tagów.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function addTag(event) {
+    event.preventDefault();
+
+    const tagName = document.getElementById('newTagName').value.trim();
+    const tagValue = document.getElementById('newTagValue').value.trim();
+
+    if (!tagName) {
+        alert('Podaj nazwę tagu');
+        return;
+    }
+
+    fetch(`/api/host/{{ host.hostid }}/tags`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            tag: tagName,
+            value: tagValue
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Dodaj nowy wiersz do tabeli
+            const table = document.getElementById('tagsTable');
+            const newRow = table.insertRow();
+            newRow.id = `tag-${tagName}`;
+            newRow.innerHTML = `
+                <td><strong>${tagName}</strong></td>
+                <td>${tagValue || '-'}</td>
+                <td>
+                    <button class="btn btn-sm btn-danger" onclick="removeTag('${tagName}')">
+                        <i class="fas fa-trash"></i> Usuń
+                    </button>
+                </td>
+            `;
+
+            // Wyczyść formularz
+            document.getElementById('newTagName').value = '';
+            document.getElementById('newTagValue').value = '';
+
+            // Pokaż komunikat o sukcesie
+            showAlert('success', data.message);
+        } else {
+            showAlert('danger', data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showAlert('danger', 'Wystąpił błąd podczas dodawania tagu');
+    });
+}
+
+function removeTag(tagName) {
+    if (!confirm(`Czy na pewno chcesz usunąć tag "${tagName}"?`)) {
+        return;
+    }
+
+    fetch(`/api/host/{{ host.hostid }}/tags/${encodeURIComponent(tagName)}`, {
+        method: 'DELETE'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Usuń wiersz z tabeli
+            const row = document.getElementById(`tag-${tagName}`);
+            if (row) {
+                row.remove();
+            }
+
+            showAlert('success', data.message);
+        } else {
+            showAlert('danger', data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showAlert('danger', 'Wystąpił błąd podczas usuwania tagu');
+    });
+}
+
+function showAlert(type, message) {
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+
+    const container = document.querySelector('.container');
+    const firstChild = container.firstChild;
+    container.insertBefore(alertDiv, firstChild);
+
+    // Automatycznie usuń alert po 5 sekundach
+    setTimeout(() => {
+        alertDiv.remove();
+    }, 5000);
+}
+</script>
+{% endblock %}

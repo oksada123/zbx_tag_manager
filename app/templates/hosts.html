@@ -1,0 +1,377 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <h2><i class="fas fa-server"></i> Zarządzanie hostami</h2>
+
+        <!-- Pasek wyszukiwania i filtrów -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5><i class="fas fa-search"></i> Wyszukiwanie i filtry</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-5">
+                        <input type="text" id="searchHosts" class="form-control" placeholder="Szukaj po nazwie hosta...">
+                    </div>
+                    <div class="col-md-5">
+                        <input type="text" id="filterByTag" class="form-control" placeholder="Filtruj po tagu...">
+                    </div>
+                    <div class="col-md-2">
+                        <button id="clearFiltersBtn" class="btn btn-outline-secondary w-100" onclick="clearFilters()">
+                            <i class="fas fa-times"></i> Wyczyść
+                        </button>
+                    </div>
+                </div>
+                <div class="row mt-2">
+                    <div class="col-md-12">
+                        <small id="filterStatus" class="text-muted"></small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Operacje masowe -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5><i class="fas fa-cogs"></i> Operacje masowe</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <input type="text" id="bulkTagName" class="form-control" placeholder="Nazwa tagu">
+                    </div>
+                    <div class="col-md-3">
+                        <input type="text" id="bulkTagValue" class="form-control" placeholder="Wartość tagu (opcjonalna)">
+                    </div>
+                    <div class="col-md-6">
+                        <button class="btn btn-success me-2" onclick="bulkAddTags()">
+                            <i class="fas fa-plus"></i> Dodaj do zaznaczonych
+                        </button>
+                        <button class="btn btn-danger" onclick="bulkRemoveTags()">
+                            <i class="fas fa-minus"></i> Usuń z zaznaczonych
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Lista hostów -->
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5><i class="fas fa-list"></i> Lista hostów</h5>
+                <div>
+                    <button class="btn btn-sm btn-outline-primary" onclick="selectAll()">Zaznacz wszystkie</button>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="deselectAll()">Odznacz wszystkie</button>
+                </div>
+            </div>
+            <div class="card-body">
+                {% if hosts %}
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead class="table-dark">
+                            <tr>
+                                <th><input type="checkbox" id="selectAllCheckbox" onchange="toggleAll()"></th>
+                                <th>Nazwa hosta</th>
+                                <th>Host</th>
+                                <th>Status</th>
+                                <th>Tagi</th>
+                                <th>Akcje</th>
+                            </tr>
+                        </thead>
+                        <tbody id="hostsTable">
+                            {% for host in hosts %}
+                            <tr data-host-name="{{ host.name|lower }}" data-host-tags="{% for tag in host.tags %}{{ tag.tag|lower }} {% endfor %}">
+                                <td>
+                                    <input type="checkbox" class="host-checkbox" value="{{ host.hostid }}">
+                                </td>
+                                <td>{{ host.name }}</td>
+                                <td>{{ host.host }}</td>
+                                <td>
+                                    {% if host.status == "0" %}
+                                        <span class="badge bg-success">Aktywny</span>
+                                    {% else %}
+                                        <span class="badge bg-danger">Nieaktywny</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% for tag in host.tags %}
+                                        <span class="badge bg-primary me-1">
+                                            {{ tag.tag }}{% if tag.value %}: {{ tag.value }}{% endif %}
+                                        </span>
+                                    {% endfor %}
+                                </td>
+                                <td>
+                                    <a href="{{ url_for('host_tags', host_id=host.hostid) }}" class="btn btn-sm btn-outline-primary">
+                                        <i class="fas fa-edit"></i> Zarządzaj tagami
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i> Nie znaleziono hostów lub wystąpił błąd podczas pobierania danych.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Funkcje wyszukiwania i filtrowania
+document.getElementById('searchHosts').addEventListener('input', filterHosts);
+document.getElementById('filterByTag').addEventListener('input', filterHosts);
+
+// Dodaj event listenery do checkbox'ów hostów po załadowaniu strony
+document.addEventListener('DOMContentLoaded', function() {
+    // Dodaj event listener do każdego checkbox'a hosta
+    document.querySelectorAll('.host-checkbox').forEach(checkbox => {
+        checkbox.addEventListener('change', updateSelectAllCheckbox);
+    });
+
+    // Sprawdź stan filtrów po załadowaniu strony i zastosuj je
+    initializeFiltersOnLoad();
+});
+
+function initializeFiltersOnLoad() {
+    const searchTerm = document.getElementById('searchHosts').value.trim();
+    const tagFilter = document.getElementById('filterByTag').value.trim();
+
+    if (searchTerm || tagFilter) {
+        // Jeśli są wartości w filtrach, zastosuj filtrowanie
+        filterHosts();
+    } else {
+        // Jeśli filtry są puste, ukryj przycisk "Wyczyść"
+        document.getElementById('clearFiltersBtn').style.display = 'none';
+    }
+}
+
+function filterHosts() {
+    const searchTerm = document.getElementById('searchHosts').value.toLowerCase();
+    const tagFilter = document.getElementById('filterByTag').value.toLowerCase();
+    const rows = document.querySelectorAll('#hostsTable tr');
+
+    let visibleCount = 0;
+    let totalCount = 0;
+
+    rows.forEach(row => {
+        const hostName = row.getAttribute('data-host-name');
+        const hostTags = row.getAttribute('data-host-tags');
+
+        if (hostName && hostTags !== null) { // Sprawdź czy to wiersz z danymi hostów
+            totalCount++;
+
+            const matchesSearch = !searchTerm || hostName.includes(searchTerm);
+            const matchesTag = !tagFilter || (hostTags && hostTags.includes(tagFilter));
+
+            if (matchesSearch && matchesTag) {
+                row.style.display = '';
+                visibleCount++;
+            } else {
+                row.style.display = 'none';
+                // Odznacz ukryte hosty
+                const checkbox = row.querySelector('.host-checkbox');
+                if (checkbox) {
+                    checkbox.checked = false;
+                }
+            }
+        }
+    });
+
+    // Zaktualizuj status filtrowania
+    updateFilterStatus(searchTerm, tagFilter, visibleCount, totalCount);
+
+    // Zaktualizuj stan głównego checkbox'a po filtrowaniu
+    updateSelectAllCheckbox();
+}
+
+function updateFilterStatus(searchTerm, tagFilter, visibleCount, totalCount) {
+    const statusElement = document.getElementById('filterStatus');
+    const clearBtn = document.getElementById('clearFiltersBtn');
+
+    const hasFilters = searchTerm || tagFilter;
+
+    if (hasFilters) {
+        statusElement.textContent = `Pokazano ${visibleCount} z ${totalCount} hostów`;
+        clearBtn.style.display = '';
+    } else {
+        statusElement.textContent = '';
+        clearBtn.style.display = 'none';
+    }
+}
+
+// Funkcja czyszczenia filtrów
+function clearFilters() {
+    // Wyczyść pola wyszukiwania
+    document.getElementById('searchHosts').value = '';
+    document.getElementById('filterByTag').value = '';
+
+    // Pokaż wszystkie wiersze
+    const rows = document.querySelectorAll('#hostsTable tr');
+    let totalCount = 0;
+
+    rows.forEach(row => {
+        const hostName = row.getAttribute('data-host-name');
+        if (hostName) { // Tylko wiersze z danymi hostów
+            totalCount++;
+        }
+        row.style.display = '';
+    });
+
+    // Zaktualizuj status filtrowania
+    updateFilterStatus('', '', totalCount, totalCount);
+
+    // Zaktualizuj stan głównego checkbox'a
+    updateSelectAllCheckbox();
+}
+
+// Funkcja do aktualizacji stanu głównego checkbox'a
+function updateSelectAllCheckbox() {
+    const visibleCheckboxes = [];
+    document.querySelectorAll('#hostsTable tr').forEach(row => {
+        if (row.style.display !== 'none') {
+            const checkbox = row.querySelector('.host-checkbox');
+            if (checkbox) {
+                visibleCheckboxes.push(checkbox);
+            }
+        }
+    });
+
+    const checkedVisibleCheckboxes = visibleCheckboxes.filter(cb => cb.checked);
+    const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+
+    if (visibleCheckboxes.length === 0) {
+        selectAllCheckbox.checked = false;
+        selectAllCheckbox.indeterminate = false;
+    } else if (checkedVisibleCheckboxes.length === visibleCheckboxes.length) {
+        selectAllCheckbox.checked = true;
+        selectAllCheckbox.indeterminate = false;
+    } else if (checkedVisibleCheckboxes.length > 0) {
+        selectAllCheckbox.checked = false;
+        selectAllCheckbox.indeterminate = true;
+    } else {
+        selectAllCheckbox.checked = false;
+        selectAllCheckbox.indeterminate = false;
+    }
+}
+
+// Funkcje zaznaczania - tylko widoczne hosty
+function selectAll() {
+    // Zaznacz tylko checkbox'y w widocznych wierszach
+    document.querySelectorAll('#hostsTable tr').forEach(row => {
+        if (row.style.display !== 'none') {
+            const checkbox = row.querySelector('.host-checkbox');
+            if (checkbox) {
+                checkbox.checked = true;
+            }
+        }
+    });
+    document.getElementById('selectAllCheckbox').checked = true;
+}
+
+function deselectAll() {
+    // Odznacz tylko checkbox'y w widocznych wierszach
+    document.querySelectorAll('#hostsTable tr').forEach(row => {
+        if (row.style.display !== 'none') {
+            const checkbox = row.querySelector('.host-checkbox');
+            if (checkbox) {
+                checkbox.checked = false;
+            }
+        }
+    });
+    document.getElementById('selectAllCheckbox').checked = false;
+}
+
+function toggleAll() {
+    const selectAll = document.getElementById('selectAllCheckbox').checked;
+    // Toggle tylko checkbox'y w widocznych wierszach
+    document.querySelectorAll('#hostsTable tr').forEach(row => {
+        if (row.style.display !== 'none') {
+            const checkbox = row.querySelector('.host-checkbox');
+            if (checkbox) {
+                checkbox.checked = selectAll;
+            }
+        }
+    });
+}
+
+// Operacje masowe
+function bulkAddTags() {
+    const tagName = document.getElementById('bulkTagName').value.trim();
+    const tagValue = document.getElementById('bulkTagValue').value.trim();
+
+    if (!tagName) {
+        alert('Podaj nazwę tagu');
+        return;
+    }
+
+    const selectedHosts = getSelectedHosts();
+    if (selectedHosts.length === 0) {
+        alert('Zaznacz przynajmniej jeden host');
+        return;
+    }
+
+    if (confirm(`Czy na pewno chcesz dodać tag "${tagName}" do ${selectedHosts.length} hostów?`)) {
+        bulkOperation('add', selectedHosts, tagName, tagValue);
+    }
+}
+
+function bulkRemoveTags() {
+    const tagName = document.getElementById('bulkTagName').value.trim();
+
+    if (!tagName) {
+        alert('Podaj nazwę tagu');
+        return;
+    }
+
+    const selectedHosts = getSelectedHosts();
+    if (selectedHosts.length === 0) {
+        alert('Zaznacz przynajmniej jeden host');
+        return;
+    }
+
+    if (confirm(`Czy na pewno chcesz usunąć tag "${tagName}" z ${selectedHosts.length} hostów?`)) {
+        bulkOperation('remove', selectedHosts, tagName, '');
+    }
+}
+
+function getSelectedHosts() {
+    return Array.from(document.querySelectorAll('.host-checkbox:checked')).map(cb => cb.value);
+}
+
+function bulkOperation(operation, hostIds, tagName, tagValue) {
+    const payload = {
+        operation: operation,
+        host_ids: hostIds,
+        tag: tagName,
+        value: tagValue
+    };
+
+    fetch('/api/hosts/tags/bulk', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert('Błąd: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error in bulkOperation:', error);
+        alert('Wystąpił błąd podczas operacji');
+    });
+}
+</script>
+{% endblock %}

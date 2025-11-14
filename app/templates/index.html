@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="jumbotron bg-primary text-white p-5 rounded">
+            <h1 class="display-4">Zabbix Tag Manager</h1>
+            <p class="lead">Zarządzaj tagami w Zabbix 7 w prosty i intuicyjny sposób</p>
+            <hr class="my-4">
+            <p>Ta aplikacja pozwala na łatwe zarządzanie tagami hostów w systemie Zabbix.</p>
+            <a class="btn btn-light btn-lg" href="{{ url_for('hosts') }}" role="button">
+                <i class="fas fa-server"></i> Zobacz hosty
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body text-center">
+                <i class="fas fa-server fa-3x text-primary mb-3"></i>
+                <h5 class="card-title">Zarządzanie hostami</h5>
+                <p class="card-text">Przeglądaj i zarządzaj hostami oraz ich tagami</p>
+                <a href="{{ url_for('hosts') }}" class="btn btn-primary">
+                    <i class="fas fa-arrow-right"></i> Przejdź do hostów
+                </a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body text-center">
+                <i class="fas fa-exclamation-triangle fa-3x text-warning mb-3"></i>
+                <h5 class="card-title">Zarządzanie triggerami</h5>
+                <p class="card-text">Przeglądaj i zarządzaj triggerami oraz ich tagami</p>
+                <a href="{{ url_for('triggers') }}" class="btn btn-warning">
+                    <i class="fas fa-arrow-right"></i> Przejdź do triggerów
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body text-center">
+                <i class="fas fa-tags fa-3x text-success mb-3"></i>
+                <h5 class="card-title">Operacje masowe</h5>
+                <p class="card-text">Dodawaj i usuwaj tagi dla wielu elementów jednocześnie</p>
+                <a href="{{ url_for('hosts') }}" class="btn btn-success">
+                    <i class="fas fa-arrow-right"></i> Hosty
+                </a>
+                <a href="{{ url_for('triggers') }}" class="btn btn-warning ms-2">
+                    <i class="fas fa-arrow-right"></i> Triggery
+                </a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body text-center">
+                <i class="fas fa-search fa-3x text-info mb-3"></i>
+                <h5 class="card-title">Wyszukiwanie</h5>
+                <p class="card-text">Znajdź hosty i triggery po tagach i ich wartościach</p>
+                <a href="{{ url_for('hosts') }}" class="btn btn-info">
+                    <i class="fas fa-arrow-right"></i> Hosty
+                </a>
+                <a href="{{ url_for('triggers') }}" class="btn btn-warning ms-2">
+                    <i class="fas fa-arrow-right"></i> Triggery
+                </a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body text-center">
+                <i class="fas fa-cogs fa-3x text-secondary mb-3"></i>
+                <h5 class="card-title">Zarządzanie</h5>
+                <p class="card-text">Kompleksowe zarządzanie tagami w całym środowisku</p>
+                <div class="btn-group-vertical w-100">
+                    <a href="{{ url_for('hosts') }}" class="btn btn-outline-primary btn-sm">
+                        <i class="fas fa-server"></i> Hosty
+                    </a>
+                    <a href="{{ url_for('triggers') }}" class="btn btn-outline-warning btn-sm">
+                        <i class="fas fa-exclamation-triangle"></i> Triggery
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-5">
+    <div class="col-md-12">
+        <h3>Funkcjonalności</h3>
+        <div class="row">
+            <div class="col-md-6">
+                <h5><i class="fas fa-server text-primary"></i> Hosty</h5>
+                <ul class="list-group">
+                    <li class="list-group-item">
+                        <i class="fas fa-check text-success"></i>
+                        Przeglądanie wszystkich hostów z tagami
+                    </li>
+                    <li class="list-group-item">
+                        <i class="fas fa-check text-success"></i>
+                        Dodawanie i usuwanie tagów dla pojedynczych hostów
+                    </li>
+                    <li class="list-group-item">
+                        <i class="fas fa-check text-success"></i>
+                        Operacje masowe na tagach dla wielu hostów
+                    </li>
+                    <li class="list-group-item">
+                        <i class="fas fa-check text-success"></i>
+                        Wyszukiwanie i filtrowanie hostów po tagach
+                    </li>
+                </ul>
+            </div>
+            <div class="col-md-6">
+                <h5><i class="fas fa-exclamation-triangle text-warning"></i> Triggery</h5>
+                <ul class="list-group">
+                    <li class="list-group-item">
+                        <i class="fas fa-check text-success"></i>
+                        Przeglądanie wszystkich triggerów z tagami
+                    </li>
+                    <li class="list-group-item">
+                        <i class="fas fa-check text-success"></i>
+                        Dodawanie i usuwanie tagów dla pojedynczych triggerów
+                    </li>
+                    <li class="list-group-item">
+                        <i class="fas fa-check text-success"></i>
+                        Operacje masowe na tagach dla wielu triggerów
+                    </li>
+                    <li class="list-group-item">
+                        <i class="fas fa-check text-success"></i>
+                        Wyszukiwanie i filtrowanie triggerów po tagach
+                    </li>
+                </ul>
+            </div>
+        </div>
+        <div class="row mt-3">
+            <div class="col-md-12">
+                <h5><i class="fas fa-cogs text-secondary"></i> Ogólne</h5>
+                <ul class="list-group">
+                    <li class="list-group-item">
+                        <i class="fas fa-check text-success"></i>
+                        Intuicyjny i responsywny interfejs webowy
+                    </li>
+                    <li class="list-group-item">
+                        <i class="fas fa-check text-success"></i>
+                        Kompatybilny z Zabbix 7.x
+                    </li>
+                    <li class="list-group-item">
+                        <i class="fas fa-check text-success"></i>
+                        Bezpieczne połączenie z Zabbix API
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

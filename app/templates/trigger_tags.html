@@ -1,0 +1,217 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Główna</a></li>
+                <li class="breadcrumb-item"><a href="{{ url_for('triggers') }}">Triggery</a></li>
+                <li class="breadcrumb-item active" aria-current="page">Tagi triggera</li>
+            </ol>
+        </nav>
+
+        <h2><i class="fas fa-exclamation-triangle"></i> Zarządzanie tagami triggera</h2>
+
+        {% if trigger %}
+        <!-- Informacje o triggerze -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5><i class="fas fa-info-circle"></i> Informacje o triggerze</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>ID:</strong> {{ trigger.triggerid }}</p>
+                        <p><strong>Opis:</strong> {{ trigger.description }}</p>
+                        <p><strong>Status:</strong>
+                            {% if trigger.status == "0" %}
+                                <span class="badge bg-success">Aktywny</span>
+                            {% else %}
+                                <span class="badge bg-danger">Nieaktywny</span>
+                            {% endif %}
+                        </p>
+                    </div>
+                    <div class="col-md-6">
+                        <p><strong>Priorytet:</strong>
+                            {% if trigger.priority == "0" %}
+                                <span class="badge bg-secondary">Nieustalony</span>
+                            {% elif trigger.priority == "1" %}
+                                <span class="badge bg-info">Informacja</span>
+                            {% elif trigger.priority == "2" %}
+                                <span class="badge bg-warning">Ostrzeżenie</span>
+                            {% elif trigger.priority == "3" %}
+                                <span class="badge bg-warning">Średni</span>
+                            {% elif trigger.priority == "4" %}
+                                <span class="badge bg-danger">Wysoki</span>
+                            {% elif trigger.priority == "5" %}
+                                <span class="badge bg-danger">Krytyczny</span>
+                            {% else %}
+                                <span class="badge bg-secondary">{{ trigger.priority }}</span>
+                            {% endif %}
+                        </p>
+                        <p><strong>Host:</strong>
+                            {% if trigger.hosts %}
+                                {% for host in trigger.hosts %}
+                                    <span class="badge bg-light text-dark">{{ host.name }}</span>
+                                {% endfor %}
+                            {% else %}
+                                <span class="text-muted">Brak hosta</span>
+                            {% endif %}
+                        </p>
+                        {% if trigger.url %}
+                        <p><strong>URL:</strong> <a href="{{ trigger.url }}" target="_blank">{{ trigger.url }}</a></p>
+                        {% endif %}
+                    </div>
+                </div>
+                {% if trigger.expression %}
+                <div class="row mt-2">
+                    <div class="col-md-12">
+                        <p><strong>Wyrażenie:</strong></p>
+                        <code class="bg-light p-2 d-block">{{ trigger.expression }}</code>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Dodawanie nowego tagu -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5><i class="fas fa-plus"></i> Dodaj nowy tag</h5>
+            </div>
+            <div class="card-body">
+                <form id="addTagForm">
+                    <div class="row">
+                        <div class="col-md-5">
+                            <input type="text" id="newTagName" class="form-control" placeholder="Nazwa tagu" required>
+                        </div>
+                        <div class="col-md-5">
+                            <input type="text" id="newTagValue" class="form-control" placeholder="Wartość tagu (opcjonalna)">
+                        </div>
+                        <div class="col-md-2">
+                            <button type="submit" class="btn btn-success w-100">
+                                <i class="fas fa-plus"></i> Dodaj
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Lista obecnych tagów -->
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-tags"></i> Obecne tagi</h5>
+            </div>
+            <div class="card-body">
+                {% if trigger.tags %}
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Nazwa tagu</th>
+                                <th>Wartość</th>
+                                <th>Akcje</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tagsTable">
+                            {% for tag in trigger.tags %}
+                            <tr>
+                                <td><strong>{{ tag.tag }}</strong></td>
+                                <td>
+                                    {% if tag.value %}
+                                        {{ tag.value }}
+                                    {% else %}
+                                        <span class="text-muted">Brak wartości</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm btn-danger" onclick="removeTag('{{ tag.tag }}')">
+                                        <i class="fas fa-trash"></i> Usuń
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i> Ten trigger nie ma jeszcze żadnych tagów.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% else %}
+        <div class="alert alert-danger">
+            <i class="fas fa-exclamation-triangle"></i> Nie można załadować informacji o triggerze.
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+// Dodawanie tagu
+document.getElementById('addTagForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+
+    const tagName = document.getElementById('newTagName').value.trim();
+    const tagValue = document.getElementById('newTagValue').value.trim();
+
+    if (!tagName) {
+        alert('Podaj nazwę tagu');
+        return;
+    }
+
+    addTag(tagName, tagValue);
+});
+
+function addTag(tagName, tagValue) {
+    const payload = {
+        tag: tagName,
+        value: tagValue
+    };
+
+    fetch(`/api/trigger/{{ trigger.triggerid }}/tags`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Błąd: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error adding tag:', error);
+        alert('Wystąpił błąd podczas dodawania tagu');
+    });
+}
+
+function removeTag(tagName) {
+    if (confirm(`Czy na pewno chcesz usunąć tag "${tagName}"?`)) {
+        fetch(`/api/trigger/{{ trigger.triggerid }}/tags/${encodeURIComponent(tagName)}`, {
+            method: 'DELETE'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('Błąd: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error removing tag:', error);
+            alert('Wystąpił błąd podczas usuwania tagu');
+        });
+    }
+}
+</script>
+{% endblock %}

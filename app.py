@@ -15,25 +15,25 @@ def index():
 @app.route('/hosts')
 def hosts():
     try:
-        debug_print("Tworzę nowy obiekt ZabbixAPI...")
+        debug_print("Creating new ZabbixAPI object...")
         zabbix = ZabbixAPI()
 
-        debug_print("Próbuję się zalogować...")
+        debug_print("Attempting to log in...")
         if not zabbix.authenticate():
-            flash('Nie można połączyć się z Zabbix API. Sprawdź konfigurację w pliku .env', 'error')
+            flash('Cannot connect to Zabbix API. Check configuration in .env file', 'error')
             return render_template('hosts.html', hosts=[])
 
-        debug_print("Pobieram listę hostów...")
+        debug_print("Fetching list of hosts...")
         hosts_data = zabbix.get_hosts()
         if hosts_data is None:
-            flash('Nie można pobrać danych z Zabbix API', 'error')
+            flash('Cannot retrieve data from Zabbix API', 'error')
             return render_template('hosts.html', hosts=[])
 
-        debug_print(f"Pobrano {len(hosts_data)} hostów")
+        debug_print(f"Retrieved {len(hosts_data)} hosts")
         return render_template('hosts.html', hosts=hosts_data)
     except Exception as e:
-        debug_print(f"Exception w hosts(): {str(e)}")
-        flash(f'Błąd podczas pobierania hostów: {str(e)}', 'error')
+        debug_print(f"Exception in hosts(): {str(e)}")
+        flash(f'Error while fetching hosts: {str(e)}', 'error')
         return render_template('hosts.html', hosts=[])
 
 @app.route('/host/<int:host_id>/tags')
@@ -41,13 +41,13 @@ def host_tags(host_id):
     try:
         zabbix = ZabbixAPI()
         if not zabbix.authenticate():
-            flash('Nie można połączyć się z Zabbix API', 'error')
+            flash('Cannot connect to Zabbix API', 'error')
             return redirect(url_for('hosts'))
 
         host_info = zabbix.get_host_details(host_id)
         return render_template('host_tags.html', host=host_info)
     except Exception as e:
-        flash(f'Błąd podczas pobierania tagów hosta: {str(e)}', 'error')
+        flash(f'Error while fetching host tags: {str(e)}', 'error')
         return redirect(url_for('hosts'))
 
 @app.route('/api/host/<int:host_id>/tags', methods=['POST'])
@@ -58,13 +58,13 @@ def add_tag(host_id):
 
         zabbix = ZabbixAPI()
         if not zabbix.authenticate():
-            return jsonify({'success': False, 'message': 'Błąd autoryzacji'})
+            return jsonify({'success': False, 'message': 'Authorization error'})
 
         result = zabbix.add_tag_to_host(host_id, tag_name, tag_value)
         if result:
-            return jsonify({'success': True, 'message': 'Tag został dodany'})
+            return jsonify({'success': True, 'message': 'Tag has been added'})
         else:
-            return jsonify({'success': False, 'message': 'Nie udało się dodać tagu'})
+            return jsonify({'success': False, 'message': 'Failed to add tag'})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)})
 
@@ -73,13 +73,13 @@ def remove_tag(host_id, tag_name):
     try:
         zabbix = ZabbixAPI()
         if not zabbix.authenticate():
-            return jsonify({'success': False, 'message': 'Błąd autoryzacji'})
+            return jsonify({'success': False, 'message': 'Authorization error'})
 
         result = zabbix.remove_tag_from_host(host_id, tag_name)
         if result:
-            return jsonify({'success': True, 'message': 'Tag został usunięty'})
+            return jsonify({'success': True, 'message': 'Tag has been removed'})
         else:
-            return jsonify({'success': False, 'message': 'Nie udało się usunąć tagu'})
+            return jsonify({'success': False, 'message': 'Failed to remove tag'})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)})
 
@@ -93,63 +93,63 @@ def bulk_tag_operation():
 
         zabbix = ZabbixAPI()
         if not zabbix.authenticate():
-            return jsonify({'success': False, 'message': 'Błąd autoryzacji'})
+            return jsonify({'success': False, 'message': 'Authorization error'})
 
         if operation == 'add':
             success_count = zabbix.bulk_add_tags(host_ids, tag_name, tag_value)
             return jsonify({
                 'success': True,
-                'message': f'Tag dodany do {success_count} hostów'
+                'message': f'Tag added to {success_count} hosts'
             })
         elif operation == 'remove':
             success_count = zabbix.bulk_remove_tags(host_ids, tag_name)
             return jsonify({
                 'success': True,
-                'message': f'Tag usunięty z {success_count} hostów'
+                'message': f'Tag removed from {success_count} hosts'
             })
         else:
-            return jsonify({'success': False, 'message': 'Nieznana operacja'})
+            return jsonify({'success': False, 'message': 'Unknown operation'})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)})
 
 # ===============================
-# ENDPOINTY DLA TRIGGERÓW
+# TRIGGER ENDPOINTS
 # ===============================
 
 @app.route('/triggers')
 def triggers():
     try:
-        # Pobierz parametry paginacji
+        # Get pagination parameters
         page = request.args.get('page', 1, type=int)
-        per_page = request.args.get('per_page', 100, type=int)  # 100 triggerów na stronę
+        per_page = request.args.get('per_page', 100, type=int)  # 100 triggers per page
 
-        debug_print("Tworzę nowy obiekt ZabbixAPI dla triggerów...")
+        debug_print("Creating new ZabbixAPI object for triggers...")
         zabbix = ZabbixAPI()
 
-        debug_print("Próbuję się zalogować...")
+        debug_print("Attempting to log in...")
         if not zabbix.authenticate():
-            flash('Nie można połączyć się z Zabbix API. Sprawdź konfigurację w pliku .env', 'error')
+            flash('Cannot connect to Zabbix API. Check configuration in .env file', 'error')
             return render_template('triggers.html', triggers=[], total_count=0, page=1, per_page=per_page, total_pages=1)
 
-        debug_print("Pobieram liczbę triggerów...")
+        debug_print("Fetching number of triggers...")
         total_count = zabbix.get_triggers_count()
-        debug_print(f"Łączna liczba triggerów: {total_count}")
+        debug_print(f"Total number of triggers: {total_count}")
 
         if total_count == 0:
             return render_template('triggers.html', triggers=[], total_count=0, page=1, per_page=per_page, total_pages=1)
 
-        # Oblicz paginację
+        # Calculate pagination
         total_pages = (total_count + per_page - 1) // per_page
         offset = (page - 1) * per_page
 
-        debug_print(f"Pobieram triggery: strona {page}/{total_pages}, offset {offset}, limit {per_page}...")
+        debug_print(f"Fetching triggers: page {page}/{total_pages}, offset {offset}, limit {per_page}...")
         triggers_data = zabbix.get_triggers(limit=per_page, offset=offset)
 
         if triggers_data is None:
-            flash('Nie można pobrać danych z Zabbix API', 'error')
+            flash('Cannot retrieve data from Zabbix API', 'error')
             return render_template('triggers.html', triggers=[], total_count=0, page=1, per_page=per_page, total_pages=1)
 
-        debug_print(f"Pobrano {len(triggers_data)} triggerów dla strony {page}")
+        debug_print(f"Retrieved {len(triggers_data)} triggers for page {page}")
         return render_template('triggers.html',
                              triggers=triggers_data,
                              total_count=total_count,
@@ -157,8 +157,8 @@ def triggers():
                              per_page=per_page,
                              total_pages=total_pages)
     except Exception as e:
-        debug_print(f"Exception w triggers(): {str(e)}")
-        flash(f'Błąd podczas pobierania triggerów: {str(e)}', 'error')
+        debug_print(f"Exception in triggers(): {str(e)}")
+        flash(f'Error while fetching triggers: {str(e)}', 'error')
         return render_template('triggers.html', triggers=[], total_count=0, page=1, per_page=100, total_pages=1)
 
 @app.route('/trigger/<int:trigger_id>/tags')
@@ -166,13 +166,13 @@ def trigger_tags(trigger_id):
     try:
         zabbix = ZabbixAPI()
         if not zabbix.authenticate():
-            flash('Nie można połączyć się z Zabbix API', 'error')
+            flash('Cannot connect to Zabbix API', 'error')
             return redirect(url_for('triggers'))
 
         trigger_info = zabbix.get_trigger_details(trigger_id)
         return render_template('trigger_tags.html', trigger=trigger_info)
     except Exception as e:
-        flash(f'Błąd podczas pobierania tagów triggera: {str(e)}', 'error')
+        flash(f'Error while fetching trigger tags: {str(e)}', 'error')
         return redirect(url_for('triggers'))
 
 @app.route('/api/trigger/<int:trigger_id>/tags', methods=['POST'])
@@ -183,13 +183,13 @@ def add_tag_to_trigger(trigger_id):
 
         zabbix = ZabbixAPI()
         if not zabbix.authenticate():
-            return jsonify({'success': False, 'message': 'Błąd autoryzacji'})
+            return jsonify({'success': False, 'message': 'Authorization error'})
 
         result = zabbix.add_tag_to_trigger(trigger_id, tag_name, tag_value)
         if result:
-            return jsonify({'success': True, 'message': 'Tag został dodany'})
+            return jsonify({'success': True, 'message': 'Tag has been added'})
         else:
-            return jsonify({'success': False, 'message': 'Nie udało się dodać tagu'})
+            return jsonify({'success': False, 'message': 'Failed to add tag'})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)})
 
@@ -198,13 +198,13 @@ def remove_tag_from_trigger(trigger_id, tag_name):
     try:
         zabbix = ZabbixAPI()
         if not zabbix.authenticate():
-            return jsonify({'success': False, 'message': 'Błąd autoryzacji'})
+            return jsonify({'success': False, 'message': 'Authorization error'})
 
         result = zabbix.remove_tag_from_trigger(trigger_id, tag_name)
         if result:
-            return jsonify({'success': True, 'message': 'Tag został usunięty'})
+            return jsonify({'success': True, 'message': 'Tag has been removed'})
         else:
-            return jsonify({'success': False, 'message': 'Nie udało się usunąć tagu'})
+            return jsonify({'success': False, 'message': 'Failed to remove tag'})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)})
 
@@ -218,22 +218,22 @@ def bulk_trigger_operation():
 
         zabbix = ZabbixAPI()
         if not zabbix.authenticate():
-            return jsonify({'success': False, 'message': 'Błąd autoryzacji'})
+            return jsonify({'success': False, 'message': 'Authorization error'})
 
         if operation == 'add':
             success_count = zabbix.bulk_add_tags_to_triggers(trigger_ids, tag_name, tag_value)
             return jsonify({
                 'success': True,
-                'message': f'Tag dodany do {success_count} triggerów'
+                'message': f'Tag added to {success_count} triggers'
             })
         elif operation == 'remove':
             success_count = zabbix.bulk_remove_tags_from_triggers(trigger_ids, tag_name)
             return jsonify({
                 'success': True,
-                'message': f'Tag usunięty z {success_count} triggerów'
+                'message': f'Tag removed from {success_count} triggers'
             })
         else:
-            return jsonify({'success': False, 'message': 'Nieznana operacja'})
+            return jsonify({'success': False, 'message': 'Unknown operation'})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)})
 

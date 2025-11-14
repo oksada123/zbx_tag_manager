@@ -4,7 +4,7 @@ import os
 from typing import List, Dict, Any, Optional
 
 def debug_print(message: str):
-    """Wyświetla wiadomość DEBUG tylko jeśli DEBUG_ENABLED=true w .env"""
+    """Displays DEBUG message only if DEBUG_ENABLED=true in .env"""
     if os.getenv('DEBUG_ENABLED', 'false').lower() in ['true', '1', 'yes', 'on']:
         print(f"DEBUG: {message}")
 
@@ -16,15 +16,15 @@ class ZabbixAPI:
         self.auth_token = None
         self.session = requests.Session()
 
-        debug_print(f"Inicjalizacja ZabbixAPI:")
+        debug_print(f"Initializing ZabbixAPI:")
         debug_print(f"URL: {self.url}")
         debug_print(f"Username: {self.username}")
         debug_print(f"Password: {'*' * len(self.password) if self.password else 'None'}")
-        debug_print(f"Auth token na starcie: {self.auth_token}")
+        debug_print(f"Auth token at start: {self.auth_token}")
 
     def authenticate(self) -> bool:
-        """Autoryzacja w Zabbix API"""
-        # Dla Zabbix 7.x - spróbuj różne formaty
+        """Authentication in Zabbix API"""
+        # For Zabbix 7.x - try different formats
         payload = {
             "jsonrpc": "2.0",
             "method": "user.login",
@@ -36,7 +36,7 @@ class ZabbixAPI:
         }
 
         try:
-            debug_print(f"Wysyłam zapytanie logowania: {payload}")
+            debug_print(f"Sending login request: {payload}")
             debug_print(f"URL: {self.url}")
 
             headers = {
@@ -47,27 +47,27 @@ class ZabbixAPI:
             response = self.session.post(self.url, json=payload, headers=headers)
             response.raise_for_status()
             result = response.json()
-            debug_print(f"Odpowiedź logowania: {result}")
+            debug_print(f"Login response: {result}")
 
             if 'result' in result:
                 self.auth_token = result['result']
                 return True
             else:
                 error_info = result.get('error', {})
-                print(f"Błąd autoryzacji: {error_info.get('data', error_info.get('message', 'Nieznany błąd'))}")
+                print(f"Authorization error: {error_info.get('data', error_info.get('message', 'Unknown error'))}")
                 return False
         except requests.RequestException as e:
-            print(f"Błąd połączenia: {e}")
+            print(f"Connection error: {e}")
             return False
 
     def make_request(self, method: str, params: Dict[str, Any]) -> Optional[Any]:
-        """Wykonanie zapytania do Zabbix API"""
+        """Execute request to Zabbix API"""
         debug_print(f"make_request() method={method}, auth_token={self.auth_token}")
 
         if method != "user.login" and not self.auth_token and not self.authenticate():
             return None
 
-        # Dla Zabbix 7.x - autoryzacja przez nagłówek Authorization
+        # For Zabbix 7.x - authorization via Authorization header
         payload = {
             "jsonrpc": "2.0",
             "method": method,
@@ -75,19 +75,19 @@ class ZabbixAPI:
             "id": 1
         }
 
-        # Przygotuj nagłówki
+        # Prepare headers
         headers = {
             'Content-Type': 'application/json',
             'User-Agent': 'Zabbix Tag Manager'
         }
 
-        # Dodaj token autoryzacji do nagłówka (nie do payload!)
+        # Add authorization token to header (not to payload!)
         if method != "user.login" and self.auth_token:
             headers['Authorization'] = f'Bearer {self.auth_token}'
-            debug_print(f"Dodano Authorization header dla metody {method}")
+            debug_print(f"Added Authorization header for method {method}")
 
-        debug_print(f"Payload dla {method}: {payload}")
-        debug_print(f"Headers dla {method}: {headers}")
+        debug_print(f"Payload for {method}: {payload}")
+        debug_print(f"Headers for {method}: {headers}")
 
         try:
             response = self.session.post(self.url, json=payload, headers=headers)
@@ -98,10 +98,10 @@ class ZabbixAPI:
                 return result['result']
             else:
                 error = result.get('error', {})
-                error_message = error.get('data', error.get('message', 'Nieznany błąd'))
-                print(f"Błąd API: {error_message}")
+                error_message = error.get('data', error.get('message', 'Unknown error'))
+                print(f"API error: {error_message}")
 
-                # Jeśli błąd autoryzacji, wyczyść token i spróbuj ponownie
+                # If authentication error, clear token and try again
                 if 'authentication' in error_message.lower() or 'session' in error_message.lower():
                     self.auth_token = None
                     if method != "user.login":
@@ -109,28 +109,28 @@ class ZabbixAPI:
 
                 return None
         except requests.RequestException as e:
-            print(f"Błąd połączenia: {e}")
+            print(f"Connection error: {e}")
             return None
 
     def get_hosts(self, limit: int = None, offset: int = None) -> List[Dict[str, Any]]:
-        """Pobieranie listy hostów z tagami z opcjonalną paginacją"""
+        """Fetch list of hosts with tags with optional pagination"""
         params = {
             "output": ["hostid", "host", "name", "status"],
             "selectTags": "extend",
             "sortfield": "name"
         }
 
-        # Dodaj paginację jeśli podano
+        # Add pagination if provided
         if limit is not None:
             params["limit"] = limit
         if offset is not None:
-            params["sortorder"] = "ASC"  # Potrzebne dla stabilnej paginacji
+            params["sortorder"] = "ASC"  # Required for stable pagination
 
         hosts = self.make_request("host.get", params)
         return hosts if hosts else []
 
     def get_hosts_count(self) -> int:
-        """Pobieranie liczby hostów"""
+        """Fetch number of hosts"""
         params = {
             "countOutput": True
         }
@@ -139,7 +139,7 @@ class ZabbixAPI:
         return int(count) if count else 0
 
     def get_host_details(self, host_id: int) -> Dict[str, Any]:
-        """Pobieranie szczegółów hosta z tagami"""
+        """Fetch host details with tags"""
         params = {
             "output": ["hostid", "host", "name", "status"],
             "selectTags": "extend",
@@ -150,88 +150,88 @@ class ZabbixAPI:
         return hosts[0] if hosts else {}
 
     def add_tag_to_host(self, host_id: int, tag_name: str, tag_value: str = "") -> bool:
-        """Dodawanie tagu do hosta"""
+        """Add tag to host"""
         debug_print(f" add_tag_to_host() - host_id={host_id}, tag_name={tag_name}, tag_value={tag_value}")
 
         host = self.get_host_details(host_id)
         if not host:
-            debug_print(f" Nie znaleziono hosta o ID {host_id}")
+            debug_print(f" Host with ID {host_id} not found")
             return False
 
-        debug_print(f" Znaleziono hosta: {host.get('name', 'Unknown')}")
+        debug_print(f" Found host: {host.get('name', 'Unknown')}")
         current_tags = host.get('tags', [])
-        debug_print(f" Obecne tagi hosta: {current_tags}")
+        debug_print(f" Current host tags: {current_tags}")
 
-        # Sprawdź czy tag już istnieje
+        # Check if tag already exists
         for tag in current_tags:
             if tag['tag'] == tag_name:
-                debug_print(f" Tag '{tag_name}' już istnieje")
+                debug_print(f" Tag '{tag_name}' already exists")
                 return False
 
-        # Dodaj nowy tag
+        # Add new tag
         new_tag = {"tag": tag_name, "value": tag_value}
         current_tags.append(new_tag)
-        debug_print(f" Nowe tagi po dodaniu: {current_tags}")
+        debug_print(f" New tags after adding: {current_tags}")
 
-        # Usuń pole 'automatic' z tagów - Zabbix API nie akceptuje tego pola w host.update
+        # Remove 'automatic' field from tags - Zabbix API doesn't accept this field in host.update
         clean_tags = []
         for tag in current_tags:
             clean_tag = {"tag": tag["tag"], "value": tag["value"]}
             clean_tags.append(clean_tag)
 
-        debug_print(f" Oczyszczone tagi (bez 'automatic'): {clean_tags}")
+        debug_print(f" Cleaned tags (without 'automatic'): {clean_tags}")
 
         params = {
             "hostid": host_id,
             "tags": clean_tags
         }
 
-        debug_print(f" Wysyłam host.update z parametrami: {params}")
+        debug_print(f" Sending host.update with parameters: {params}")
         result = self.make_request("host.update", params)
-        debug_print(f" Wynik host.update: {result}")
+        debug_print(f" Result of host.update: {result}")
 
         return result is not None
 
     def remove_tag_from_host(self, host_id: int, tag_name: str) -> bool:
-        """Usuwanie tagu z hosta"""
+        """Remove tag from host"""
         debug_print(f" remove_tag_from_host() - host_id={host_id}, tag_name={tag_name}")
 
         host = self.get_host_details(host_id)
         if not host:
-            debug_print(f" Nie znaleziono hosta o ID {host_id}")
+            debug_print(f" Host with ID {host_id} not found")
             return False
 
         current_tags = host.get('tags', [])
-        debug_print(f" Obecne tagi hosta: {current_tags}")
+        debug_print(f" Current host tags: {current_tags}")
 
         updated_tags = [tag for tag in current_tags if tag['tag'] != tag_name]
-        debug_print(f" Tagi po usunięciu: {updated_tags}")
+        debug_print(f" Tags after removal: {updated_tags}")
 
         if len(updated_tags) == len(current_tags):
-            debug_print(f" Tag '{tag_name}' nie istnieje")
+            debug_print(f" Tag '{tag_name}' does not exist")
             return False
 
-        # Usuń pole 'automatic' z tagów - Zabbix API nie akceptuje tego pola w host.update
+        # Remove 'automatic' field from tags - Zabbix API doesn't accept this field in host.update
         clean_tags = []
         for tag in updated_tags:
             clean_tag = {"tag": tag["tag"], "value": tag["value"]}
             clean_tags.append(clean_tag)
 
-        debug_print(f" Oczyszczone tagi (bez 'automatic'): {clean_tags}")
+        debug_print(f" Cleaned tags (without 'automatic'): {clean_tags}")
 
         params = {
             "hostid": host_id,
             "tags": clean_tags
         }
 
-        debug_print(f" Wysyłam host.update z parametrami: {params}")
+        debug_print(f" Sending host.update with parameters: {params}")
         result = self.make_request("host.update", params)
-        debug_print(f" Wynik host.update: {result}")
+        debug_print(f" Result of host.update: {result}")
 
         return result is not None
 
     def bulk_add_tags(self, host_ids: List[int], tag_name: str, tag_value: str = "") -> int:
-        """Masowe dodawanie tagów do hostów"""
+        """Bulk add tags to hosts"""
         success_count = 0
 
         for host_id in host_ids:
@@ -241,7 +241,7 @@ class ZabbixAPI:
         return success_count
 
     def bulk_remove_tags(self, host_ids: List[int], tag_name: str) -> int:
-        """Masowe usuwanie tagów z hostów"""
+        """Bulk remove tags from hosts"""
         success_count = 0
 
         for host_id in host_ids:
@@ -251,7 +251,7 @@ class ZabbixAPI:
         return success_count
 
     def get_all_tags(self) -> List[str]:
-        """Pobieranie wszystkich używanych tagów w systemie"""
+        """Fetch all used tags in the system"""
         hosts = self.get_hosts()
         tags = set()
 
@@ -262,7 +262,7 @@ class ZabbixAPI:
         return sorted(list(tags))
 
     def search_hosts_by_tag(self, tag_name: str, tag_value: str = None) -> List[Dict[str, Any]]:
-        """Wyszukiwanie hostów po tagu"""
+        """Search hosts by tag"""
         params = {
             "output": ["hostid", "host", "name", "status"],
             "selectTags": "extend",
@@ -276,11 +276,11 @@ class ZabbixAPI:
         return hosts if hosts else []
 
     # ===============================
-    # METODY DLA TRIGGERÓW
+    # METHODS FOR TRIGGERS
     # ===============================
 
     def get_triggers(self, limit: int = None, offset: int = None) -> List[Dict[str, Any]]:
-        """Pobieranie listy triggerów z tagami z opcjonalną paginacją"""
+        """Fetch list of triggers with tags with optional pagination"""
         params = {
             "output": ["triggerid", "description", "status", "priority", "url", "expression"],
             "selectTags": "extend",
@@ -289,17 +289,17 @@ class ZabbixAPI:
             "expandDescription": True
         }
 
-        # Dodaj paginację jeśli podano
+        # Add pagination if provided
         if limit is not None:
             params["limit"] = limit
         if offset is not None:
-            params["sortorder"] = "ASC"  # Potrzebne dla stabilnej paginacji
+            params["sortorder"] = "ASC"  # Required for stable pagination
 
         triggers = self.make_request("trigger.get", params)
         return triggers if triggers else []
 
     def get_triggers_count(self) -> int:
-        """Pobieranie liczby triggerów"""
+        """Fetch number of triggers"""
         params = {
             "countOutput": True
         }
@@ -308,7 +308,7 @@ class ZabbixAPI:
         return int(count) if count else 0
 
     def get_trigger_details(self, trigger_id: int) -> Dict[str, Any]:
-        """Pobieranie szczegółów triggera z tagami"""
+        """Fetch trigger details with tags"""
         params = {
             "output": ["triggerid", "description", "status", "priority", "url", "expression"],
             "selectTags": "extend",
@@ -321,88 +321,88 @@ class ZabbixAPI:
         return triggers[0] if triggers else {}
 
     def add_tag_to_trigger(self, trigger_id: int, tag_name: str, tag_value: str = "") -> bool:
-        """Dodawanie tagu do triggera"""
+        """Add tag to trigger"""
         debug_print(f" add_tag_to_trigger() - trigger_id={trigger_id}, tag_name={tag_name}, tag_value={tag_value}")
 
         trigger = self.get_trigger_details(trigger_id)
         if not trigger:
-            debug_print(f" Nie znaleziono triggera o ID {trigger_id}")
+            debug_print(f" Trigger with ID {trigger_id} not found")
             return False
 
-        debug_print(f" Znaleziono trigger: {trigger.get('description', 'Unknown')}")
+        debug_print(f" Found trigger: {trigger.get('description', 'Unknown')}")
         current_tags = trigger.get('tags', [])
-        debug_print(f" Obecne tagi triggera: {current_tags}")
+        debug_print(f" Current trigger tags: {current_tags}")
 
-        # Sprawdź czy tag już istnieje
+        # Check if tag already exists
         for tag in current_tags:
             if tag['tag'] == tag_name:
-                debug_print(f" Tag '{tag_name}' już istnieje")
+                debug_print(f" Tag '{tag_name}' already exists")
                 return False
 
-        # Dodaj nowy tag
+        # Add new tag
         new_tag = {"tag": tag_name, "value": tag_value}
         current_tags.append(new_tag)
-        debug_print(f" Nowe tagi po dodaniu: {current_tags}")
+        debug_print(f" New tags after adding: {current_tags}")
 
-        # Usuń pole 'automatic' z tagów - Zabbix API nie akceptuje tego pola w trigger.update
+        # Remove 'automatic' field from tags - Zabbix API doesn't accept this field in trigger.update
         clean_tags = []
         for tag in current_tags:
             clean_tag = {"tag": tag["tag"], "value": tag["value"]}
             clean_tags.append(clean_tag)
 
-        debug_print(f" Oczyszczone tagi (bez 'automatic'): {clean_tags}")
+        debug_print(f" Cleaned tags (without 'automatic'): {clean_tags}")
 
         params = {
             "triggerid": trigger_id,
             "tags": clean_tags
         }
 
-        debug_print(f" Wysyłam trigger.update z parametrami: {params}")
+        debug_print(f" Sending trigger.update with parameters: {params}")
         result = self.make_request("trigger.update", params)
-        debug_print(f" Wynik trigger.update: {result}")
+        debug_print(f" Result of trigger.update: {result}")
 
         return result is not None
 
     def remove_tag_from_trigger(self, trigger_id: int, tag_name: str) -> bool:
-        """Usuwanie tagu z triggera"""
+        """Remove tag from trigger"""
         debug_print(f" remove_tag_from_trigger() - trigger_id={trigger_id}, tag_name={tag_name}")
 
         trigger = self.get_trigger_details(trigger_id)
         if not trigger:
-            debug_print(f" Nie znaleziono triggera o ID {trigger_id}")
+            debug_print(f" Trigger with ID {trigger_id} not found")
             return False
 
         current_tags = trigger.get('tags', [])
-        debug_print(f" Obecne tagi triggera: {current_tags}")
+        debug_print(f" Current trigger tags: {current_tags}")
 
         updated_tags = [tag for tag in current_tags if tag['tag'] != tag_name]
-        debug_print(f" Tagi po usunięciu: {updated_tags}")
+        debug_print(f" Tags after removal: {updated_tags}")
 
         if len(updated_tags) == len(current_tags):
-            debug_print(f" Tag '{tag_name}' nie istnieje")
+            debug_print(f" Tag '{tag_name}' does not exist")
             return False
 
-        # Usuń pole 'automatic' z tagów
+        # Remove 'automatic' field from tags
         clean_tags = []
         for tag in updated_tags:
             clean_tag = {"tag": tag["tag"], "value": tag["value"]}
             clean_tags.append(clean_tag)
 
-        debug_print(f" Oczyszczone tagi (bez 'automatic'): {clean_tags}")
+        debug_print(f" Cleaned tags (without 'automatic'): {clean_tags}")
 
         params = {
             "triggerid": trigger_id,
             "tags": clean_tags
         }
 
-        debug_print(f" Wysyłam trigger.update z parametrami: {params}")
+        debug_print(f" Sending trigger.update with parameters: {params}")
         result = self.make_request("trigger.update", params)
-        debug_print(f" Wynik trigger.update: {result}")
+        debug_print(f" Result of trigger.update: {result}")
 
         return result is not None
 
     def bulk_add_tags_to_triggers(self, trigger_ids: List[int], tag_name: str, tag_value: str = "") -> int:
-        """Masowe dodawanie tagów do triggerów"""
+        """Bulk add tags to triggers"""
         success_count = 0
 
         for trigger_id in trigger_ids:
@@ -412,7 +412,7 @@ class ZabbixAPI:
         return success_count
 
     def bulk_remove_tags_from_triggers(self, trigger_ids: List[int], tag_name: str) -> int:
-        """Masowe usuwanie tagów z triggerów"""
+        """Bulk remove tags from triggers"""
         success_count = 0
 
         for trigger_id in trigger_ids:
@@ -422,7 +422,7 @@ class ZabbixAPI:
         return success_count
 
     def search_triggers_by_tag(self, tag_name: str, tag_value: str = None) -> List[Dict[str, Any]]:
-        """Wyszukiwanie triggerów po tagu"""
+        """Search triggers by tag"""
         params = {
             "output": ["triggerid", "description", "status", "priority"],
             "selectTags": "extend",

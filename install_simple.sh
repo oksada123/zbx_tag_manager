@@ -1,41 +1,41 @@
 #!/bin/bash
 
-# Prosta instalacja bez środowiska wirtualnego
-# Używa --break-system-packages jako ostateczność
+# Simple installation without virtual environment
+# Uses --break-system-packages as a last resort
 
-echo "=== Zabbix Tag Manager - Prosta instalacja ==="
-echo "UWAGA: Ta metoda instaluje pakiety globalnie"
+echo "=== Zabbix Tag Manager - Simple installation ==="
+echo "WARNING: This method installs packages globally"
 
-echo "Instalacja zależności..."
+echo "Installing dependencies..."
 
-# Próba instalacji do katalogu użytkownika
+# Try installing to user directory
 if pip3 install --user -r requirements.txt 2>/dev/null; then
-    echo "Instalacja do katalogu użytkownika zakończona pomyślnie!"
+    echo "Installation to user directory completed successfully!"
     PYTHON_CMD="python3"
 elif pip3 install --break-system-packages -r requirements.txt; then
-    echo "Instalacja z --break-system-packages zakończona pomyślnie!"
+    echo "Installation with --break-system-packages completed successfully!"
     PYTHON_CMD="python3"
 else
-    echo "BŁĄD: Instalacja nie powiodła się"
+    echo "ERROR: Installation failed"
     echo ""
-    echo "Alternatywy:"
-    echo "1. Użyj Docker: ./run_with_docker.sh"
-    echo "2. Zainstaluj python3-venv: sudo apt install python3.12-venv"
-    echo "3. Użyj conda/miniconda"
+    echo "Alternatives:"
+    echo "1. Use Docker: ./run_with_docker.sh"
+    echo "2. Install python3-venv: sudo apt install python3.12-venv"
+    echo "3. Use conda/miniconda"
     exit 1
 fi
 
 echo ""
-echo "Instalacja zakończona pomyślnie!"
+echo "Installation completed successfully!"
 echo ""
-echo "=== Następne kroki ==="
-echo "1. Skopiuj .env.example do .env:"
+echo "=== Next steps ==="
+echo "1. Copy .env.example to .env:"
 echo "   cp .env.example .env"
 echo ""
-echo "2. Edytuj plik .env i uzupełnij dane Zabbix:"
+echo "2. Edit .env file and fill in Zabbix credentials:"
 echo "   nano .env"
 echo ""
-echo "3. Uruchom aplikację:"
+echo "3. Run the application:"
 echo "   $PYTHON_CMD app.py"
 echo ""
-echo "4. Otwórz http://localhost:5000 w przeglądarce"
+echo "4. Open http://localhost:5000 in your browser"

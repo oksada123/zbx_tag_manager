@@ -58,8 +58,8 @@ async function makeApiRequest(url, method = 'GET', data = null) {
         return result;
     } catch (error) {
         console.error('API Request failed:', error);
-        showNotification('danger', 'Wystąpił błąd połączenia z serwerem');
-        return { success: false, message: 'Błąd połączenia' };
+        showNotification('danger', 'A server connection error occurred');
+        return { success: false, message: 'Connection error' };
     }
 }
 
@@ -143,7 +143,7 @@ async function addTagToHost(hostId, tagName, tagValue = '') {
 }
 
 async function removeTagFromHost(hostId, tagName) {
-    if (!confirm(`Czy na pewno chcesz usunąć tag "${tagName}"?`)) {
+    if (!confirm(`Are you sure you want to remove tag "${tagName}"?`)) {
         return false;
     }
 
@@ -174,7 +174,7 @@ function validateTagForm(tagNameInputId, showAlert = true) {
 
     if (!tagName) {
         if (showAlert) {
-            showNotification('warning', 'Nazwa tagu jest wymagana');
+            showNotification('warning', 'Tag name is required');
             tagNameInput.focus();
         }
         return false;
@@ -182,7 +182,7 @@ function validateTagForm(tagNameInputId, showAlert = true) {
 
     if (tagName.length > 255) {
         if (showAlert) {
-            showNotification('warning', 'Nazwa tagu jest zbyt długa (max 255 znaków)');
+            showNotification('warning', 'Tag name is too long (max 255 characters)');
             tagNameInput.focus();
         }
         return false;
@@ -192,7 +192,7 @@ function validateTagForm(tagNameInputId, showAlert = true) {
     const invalidChars = /[<>&"']/;
     if (invalidChars.test(tagName)) {
         if (showAlert) {
-            showNotification('warning', 'Nazwa tagu zawiera niedozwolone znaki');
+            showNotification('warning', 'Tag name contains invalid characters');
             tagNameInput.focus();
         }
         return false;

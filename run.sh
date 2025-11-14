@@ -2,18 +2,18 @@
 
 # Script to run Zabbix Tag Manager
 
-echo "Uruchamianie Zabbix Tag Manager..."
+echo "Starting Zabbix Tag Manager..."
 
 # Check if virtual environment exists
 if [ ! -d "venv" ]; then
-    echo "BŁĄD: Środowisko wirtualne nie istnieje. Uruchom najpierw:"
+    echo "ERROR: Virtual environment does not exist. Run first:"
     echo "   ./install_and_run.sh"
     exit 1
 fi
 
 # Check if .env file exists
 if [ ! -f ".env" ]; then
-    echo "BŁĄD: Plik .env nie istnieje. Skopiuj i skonfiguruj:"
+    echo "ERROR: .env file does not exist. Copy and configure:"
     echo "   cp .env.example .env"
     echo "   nano .env"
     exit 1
@@ -25,13 +25,13 @@ source venv/bin/activate
 # Check if requirements are installed
 python -c "import flask, requests, dotenv" 2>/dev/null
 if [ $? -ne 0 ]; then
-    echo "BŁĄD: Zależności nie są zainstalowane. Uruchom:"
+    echo "ERROR: Dependencies are not installed. Run:"
     echo "   ./install_and_run.sh"
     exit 1
 fi
 
-echo "Uruchamianie aplikacji na http://localhost:5000"
-echo "Naciśnij Ctrl+C aby zatrzymać"
+echo "Starting application at http://localhost:5000"
+echo "Press Ctrl+C to stop"
 echo ""
 
 # Run the application

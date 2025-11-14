@@ -6,26 +6,27 @@
         <nav aria-label="breadcrumb">
             <ol class="breadcrumb">
                 <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
-                <li class="breadcrumb-item"><a href="{{ url_for('triggers') }}">Triggers</a></li>
-                <li class="breadcrumb-item active" aria-current="page">Trigger Tags</li>
+                <li class="breadcrumb-item"><a href="{{ url_for('items') }}">Items</a></li>
+                <li class="breadcrumb-item active" aria-current="page">Item Tags</li>
             </ol>
         </nav>
 
-        <h2><i class="fas fa-exclamation-triangle"></i> Manage Trigger Tags</h2>
+        <h2><i class="fas fa-chart-line"></i> Manage Item Tags</h2>
 
-        {% if trigger %}
-        <!-- Trigger Information -->
+        {% if item %}
+        <!-- Item information -->
         <div class="card mb-4">
             <div class="card-header">
-                <h5><i class="fas fa-info-circle"></i> Trigger Information</h5>
+                <h5><i class="fas fa-info-circle"></i> Item Information</h5>
             </div>
             <div class="card-body">
                 <div class="row">
                     <div class="col-md-6">
-                        <p><strong>ID:</strong> {{ trigger.triggerid }}</p>
-                        <p><strong>Description:</strong> {{ trigger.description }}</p>
+                        <p><strong>ID:</strong> {{ item.itemid }}</p>
+                        <p><strong>Name:</strong> {{ item.name }}</p>
+                        <p><strong>Key:</strong> <code>{{ item.key_ }}</code></p>
                         <p><strong>Status:</strong>
-                            {% if trigger.status == "0" %}
+                            {% if item.status == "0" %}
                                 <span class="badge bg-success">Enabled</span>
                             {% else %}
                                 <span class="badge bg-danger">Disabled</span>
@@ -33,42 +34,49 @@
                         </p>
                     </div>
                     <div class="col-md-6">
-                        <p><strong>Priority:</strong>
-                            {% if trigger.priority == "0" %}
-                                <span class="badge bg-secondary">Not classified</span>
-                            {% elif trigger.priority == "1" %}
-                                <span class="badge bg-info">Information</span>
-                            {% elif trigger.priority == "2" %}
-                                <span class="badge bg-warning">Warning</span>
-                            {% elif trigger.priority == "3" %}
-                                <span class="badge bg-warning">Average</span>
-                            {% elif trigger.priority == "4" %}
-                                <span class="badge bg-danger">High</span>
-                            {% elif trigger.priority == "5" %}
-                                <span class="badge bg-danger">Disaster</span>
+                        <p><strong>Type:</strong>
+                            {% if item.type == "0" %}
+                                <span class="badge bg-primary">Zabbix agent</span>
+                            {% elif item.type == "2" %}
+                                <span class="badge bg-info">Zabbix trapper</span>
+                            {% elif item.type == "3" %}
+                                <span class="badge bg-secondary">Simple check</span>
+                            {% elif item.type == "7" %}
+                                <span class="badge bg-success">Zabbix agent (active)</span>
+                            {% elif item.type == "10" %}
+                                <span class="badge bg-warning">External check</span>
+                            {% elif item.type == "15" %}
+                                <span class="badge bg-info">Calculated</span>
+                            {% elif item.type == "19" %}
+                                <span class="badge bg-primary">HTTP agent</span>
+                            {% elif item.type == "20" %}
+                                <span class="badge bg-success">SNMP agent</span>
                             {% else %}
-                                <span class="badge bg-secondary">{{ trigger.priority }}</span>
+                                <span class="badge bg-secondary">Type {{ item.type }}</span>
                             {% endif %}
                         </p>
                         <p><strong>Host:</strong>
-                            {% if trigger.hosts %}
-                                {% for host in trigger.hosts %}
+                            {% if item.hosts %}
+                                {% for host in item.hosts %}
                                     <span class="badge bg-light text-dark">{{ host.name }}</span>
                                 {% endfor %}
                             {% else %}
                                 <span class="text-muted">No host</span>
                             {% endif %}
                         </p>
-                        {% if trigger.url %}
-                        <p><strong>URL:</strong> <a href="{{ trigger.url }}" target="_blank">{{ trigger.url }}</a></p>
+                        {% if item.delay %}
+                        <p><strong>Update interval:</strong> {{ item.delay }}</p>
+                        {% endif %}
+                        {% if item.units %}
+                        <p><strong>Units:</strong> {{ item.units }}</p>
                         {% endif %}
                     </div>
                 </div>
-                {% if trigger.expression %}
+                {% if item.description %}
                 <div class="row mt-2">
                     <div class="col-md-12">
-                        <p><strong>Expression:</strong></p>
-                        <code class="bg-light p-2 d-block">{{ trigger.expression }}</code>
+                        <p><strong>Description:</strong></p>
+                        <p class="text-muted">{{ item.description }}</p>
                     </div>
                 </div>
                 {% endif %}
@@ -99,24 +107,24 @@
             </div>
         </div>
 
-        <!-- List of current tags -->
+        <!-- Current tags list -->
         <div class="card">
             <div class="card-header">
                 <h5><i class="fas fa-tags"></i> Current Tags</h5>
             </div>
             <div class="card-body">
-                {% if trigger.tags %}
+                {% if item.tags %}
                 <div class="table-responsive">
                     <table class="table table-striped">
                         <thead class="table-dark">
                             <tr>
-                                <th>Tag name</th>
+                                <th>Tag Name</th>
                                 <th>Value</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody id="tagsTable">
-                            {% for tag in trigger.tags %}
+                            {% for tag in item.tags %}
                             <tr>
                                 <td><strong>{{ tag.tag }}</strong></td>
                                 <td>
@@ -138,14 +146,14 @@
                 </div>
                 {% else %}
                 <div class="alert alert-info">
-                    <i class="fas fa-info-circle"></i> This trigger has no tags yet.
+                    <i class="fas fa-info-circle"></i> This item has no tags yet.
                 </div>
                 {% endif %}
             </div>
         </div>
         {% else %}
         <div class="alert alert-danger">
-            <i class="fas fa-exclamation-triangle"></i> Cannot load trigger information.
+            <i class="fas fa-exclamation-triangle"></i> Cannot load item information.
         </div>
         {% endif %}
     </div>
@@ -173,7 +181,7 @@ function addTag(tagName, tagValue) {
         value: tagValue
     };
 
-    fetch(`/api/trigger/{{ trigger.triggerid }}/tags`, {
+    fetch(`/api/item/{{ item.itemid }}/tags`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -196,7 +204,7 @@ function addTag(tagName, tagValue) {
 
 function removeTag(tagName) {
     if (confirm(`Are you sure you want to remove tag "${tagName}"?`)) {
-        fetch(`/api/trigger/{{ trigger.triggerid }}/tags/${encodeURIComponent(tagName)}`, {
+        fetch(`/api/item/{{ item.itemid }}/tags/${encodeURIComponent(tagName)}`, {
             method: 'DELETE'
         })
         .then(response => response.json())

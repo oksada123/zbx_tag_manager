@@ -5,28 +5,28 @@
     <div class="col-md-12">
         <nav aria-label="breadcrumb">
             <ol class="breadcrumb">
-                <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Główna</a></li>
-                <li class="breadcrumb-item"><a href="{{ url_for('hosts') }}">Hosty</a></li>
+                <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
+                <li class="breadcrumb-item"><a href="{{ url_for('hosts') }}">Hosts</a></li>
                 <li class="breadcrumb-item active">{{ host.name }}</li>
             </ol>
         </nav>
 
         <div class="d-flex justify-content-between align-items-center mb-4">
-            <h2><i class="fas fa-tags"></i> Tagi dla hosta: {{ host.name }}</h2>
+            <h2><i class="fas fa-tags"></i> Tags for host: {{ host.name }}</h2>
             <a href="{{ url_for('hosts') }}" class="btn btn-secondary">
-                <i class="fas fa-arrow-left"></i> Powrót do listy
+                <i class="fas fa-arrow-left"></i> Back to list
             </a>
         </div>
 
-        <!-- Informacje o hoście -->
+        <!-- Host information -->
         <div class="card mb-4">
             <div class="card-header">
-                <h5><i class="fas fa-server"></i> Informacje o hoście</h5>
+                <h5><i class="fas fa-server"></i> Host Information</h5>
             </div>
             <div class="card-body">
                 <div class="row">
                     <div class="col-md-3">
-                        <strong>Nazwa:</strong> {{ host.name }}
+                        <strong>Name:</strong> {{ host.name }}
                     </div>
                     <div class="col-md-3">
                         <strong>Host:</strong> {{ host.host }}
@@ -37,32 +37,32 @@
                     <div class="col-md-3">
                         <strong>Status:</strong>
                         {% if host.status == "0" %}
-                            <span class="badge bg-success">Aktywny</span>
+                            <span class="badge bg-success">Enabled</span>
                         {% else %}
-                            <span class="badge bg-danger">Nieaktywny</span>
+                            <span class="badge bg-danger">Disabled</span>
                         {% endif %}
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Dodawanie nowego tagu -->
+        <!-- Add new tag -->
         <div class="card mb-4">
             <div class="card-header">
-                <h5><i class="fas fa-plus"></i> Dodaj nowy tag</h5>
+                <h5><i class="fas fa-plus"></i> Add New Tag</h5>
             </div>
             <div class="card-body">
                 <form id="addTagForm" onsubmit="addTag(event)">
                     <div class="row">
                         <div class="col-md-4">
-                            <input type="text" id="newTagName" class="form-control" placeholder="Nazwa tagu" required>
+                            <input type="text" id="newTagName" class="form-control" placeholder="Tag name" required>
                         </div>
                         <div class="col-md-4">
-                            <input type="text" id="newTagValue" class="form-control" placeholder="Wartość tagu (opcjonalna)">
+                            <input type="text" id="newTagValue" class="form-control" placeholder="Tag value (optional)">
                         </div>
                         <div class="col-md-4">
                             <button type="submit" class="btn btn-success">
-                                <i class="fas fa-plus"></i> Dodaj tag
+                                <i class="fas fa-plus"></i> Add tag
                             </button>
                         </div>
                     </div>
@@ -70,10 +70,10 @@
             </div>
         </div>
 
-        <!-- Lista obecnych tagów -->
+        <!-- Current tags list -->
         <div class="card">
             <div class="card-header">
-                <h5><i class="fas fa-list"></i> Obecne tagi</h5>
+                <h5><i class="fas fa-list"></i> Current Tags</h5>
             </div>
             <div class="card-body">
                 {% if host.tags %}
@@ -81,9 +81,9 @@
                     <table class="table table-striped">
                         <thead class="table-dark">
                             <tr>
-                                <th>Nazwa tagu</th>
-                                <th>Wartość</th>
-                                <th>Akcje</th>
+                                <th>Tag Name</th>
+                                <th>Value</th>
+                                <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody id="tagsTable">
@@ -93,7 +93,7 @@
                                 <td>{{ tag.value or '-' }}</td>
                                 <td>
                                     <button class="btn btn-sm btn-danger" onclick="removeTag('{{ tag.tag }}')">
-                                        <i class="fas fa-trash"></i> Usuń
+                                        <i class="fas fa-trash"></i> Remove
                                     </button>
                                 </td>
                             </tr>
@@ -103,7 +103,7 @@
                 </div>
                 {% else %}
                 <div class="alert alert-info">
-                    <i class="fas fa-info-circle"></i> Ten host nie ma żadnych tagów.
+                    <i class="fas fa-info-circle"></i> This host has no tags yet.
                 </div>
                 {% endif %}
             </div>
@@ -119,7 +119,7 @@ function addTag(event) {
     const tagValue = document.getElementById('newTagValue').value.trim();
 
     if (!tagName) {
-        alert('Podaj nazwę tagu');
+        alert('Please provide a tag name');
         return;
     }
 
@@ -136,7 +136,7 @@ function addTag(event) {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            // Dodaj nowy wiersz do tabeli
+            // Add new row to table
             const table = document.getElementById('tagsTable');
             const newRow = table.insertRow();
             newRow.id = `tag-${tagName}`;
@@ -145,16 +145,16 @@ function addTag(event) {
                 <td>${tagValue || '-'}</td>
                 <td>
                     <button class="btn btn-sm btn-danger" onclick="removeTag('${tagName}')">
-                        <i class="fas fa-trash"></i> Usuń
+                        <i class="fas fa-trash"></i> Remove
                     </button>
                 </td>
             `;
 
-            // Wyczyść formularz
+            // Clear form
             document.getElementById('newTagName').value = '';
             document.getElementById('newTagValue').value = '';
 
-            // Pokaż komunikat o sukcesie
+            // Show success message
             showAlert('success', data.message);
         } else {
             showAlert('danger', data.message);
@@ -162,12 +162,12 @@ function addTag(event) {
     })
     .catch(error => {
         console.error('Error:', error);
-        showAlert('danger', 'Wystąpił błąd podczas dodawania tagu');
+        showAlert('danger', 'An error occurred while adding the tag');
     });
 }
 
 function removeTag(tagName) {
-    if (!confirm(`Czy na pewno chcesz usunąć tag "${tagName}"?`)) {
+    if (!confirm(`Are you sure you want to remove tag "${tagName}"?`)) {
         return;
     }
 
@@ -177,7 +177,7 @@ function removeTag(tagName) {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            // Usuń wiersz z tabeli
+            // Remove row from table
             const row = document.getElementById(`tag-${tagName}`);
             if (row) {
                 row.remove();
@@ -190,7 +190,7 @@ function removeTag(tagName) {
     })
     .catch(error => {
         console.error('Error:', error);
-        showAlert('danger', 'Wystąpił błąd podczas usuwania tagu');
+        showAlert('danger', 'An error occurred while removing the tag');
     });
 }
 
@@ -206,7 +206,7 @@ function showAlert(type, message) {
     const firstChild = container.firstChild;
     container.insertBefore(alertDiv, firstChild);
 
-    // Automatycznie usuń alert po 5 sekundach
+    // Auto remove alert after 5 seconds
     setTimeout(() => {
         alertDiv.remove();
     }, 5000);

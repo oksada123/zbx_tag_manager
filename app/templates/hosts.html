@@ -3,24 +3,24 @@
 {% block content %}
 <div class="row">
     <div class="col-md-12">
-        <h2><i class="fas fa-server"></i> Zarządzanie hostami</h2>
+        <h2><i class="fas fa-server"></i> Manage Hosts</h2>
 
-        <!-- Pasek wyszukiwania i filtrów -->
+        <!-- Search and filters bar -->
         <div class="card mb-4">
             <div class="card-header">
-                <h5><i class="fas fa-search"></i> Wyszukiwanie i filtry</h5>
+                <h5><i class="fas fa-search"></i> Search and Filters</h5>
             </div>
             <div class="card-body">
                 <div class="row">
                     <div class="col-md-5">
-                        <input type="text" id="searchHosts" class="form-control" placeholder="Szukaj po nazwie hosta...">
+                        <input type="text" id="searchHosts" class="form-control" placeholder="Search by host name...">
                     </div>
                     <div class="col-md-5">
-                        <input type="text" id="filterByTag" class="form-control" placeholder="Filtruj po tagu...">
+                        <input type="text" id="filterByTag" class="form-control" placeholder="Filter by tag...">
                     </div>
                     <div class="col-md-2">
                         <button id="clearFiltersBtn" class="btn btn-outline-secondary w-100" onclick="clearFilters()">
-                            <i class="fas fa-times"></i> Wyczyść
+                            <i class="fas fa-times"></i> Clear
                         </button>
                     </div>
                 </div>
@@ -32,38 +32,38 @@
             </div>
         </div>
 
-        <!-- Operacje masowe -->
+        <!-- Bulk operations -->
         <div class="card mb-4">
             <div class="card-header">
-                <h5><i class="fas fa-cogs"></i> Operacje masowe</h5>
+                <h5><i class="fas fa-cogs"></i> Bulk Operations</h5>
             </div>
             <div class="card-body">
                 <div class="row">
                     <div class="col-md-3">
-                        <input type="text" id="bulkTagName" class="form-control" placeholder="Nazwa tagu">
+                        <input type="text" id="bulkTagName" class="form-control" placeholder="Tag name">
                     </div>
                     <div class="col-md-3">
-                        <input type="text" id="bulkTagValue" class="form-control" placeholder="Wartość tagu (opcjonalna)">
+                        <input type="text" id="bulkTagValue" class="form-control" placeholder="Tag value (optional)">
                     </div>
                     <div class="col-md-6">
                         <button class="btn btn-success me-2" onclick="bulkAddTags()">
-                            <i class="fas fa-plus"></i> Dodaj do zaznaczonych
+                            <i class="fas fa-plus"></i> Add to selected
                         </button>
                         <button class="btn btn-danger" onclick="bulkRemoveTags()">
-                            <i class="fas fa-minus"></i> Usuń z zaznaczonych
+                            <i class="fas fa-minus"></i> Remove from selected
                         </button>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Lista hostów -->
+        <!-- Hosts list -->
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <h5><i class="fas fa-list"></i> Lista hostów</h5>
+                <h5><i class="fas fa-list"></i> Hosts List</h5>
                 <div>
-                    <button class="btn btn-sm btn-outline-primary" onclick="selectAll()">Zaznacz wszystkie</button>
-                    <button class="btn btn-sm btn-outline-secondary" onclick="deselectAll()">Odznacz wszystkie</button>
+                    <button class="btn btn-sm btn-outline-primary" onclick="selectAll()">Select all</button>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="deselectAll()">Deselect all</button>
                 </div>
             </div>
             <div class="card-body">
@@ -73,11 +73,11 @@
                         <thead class="table-dark">
                             <tr>
                                 <th><input type="checkbox" id="selectAllCheckbox" onchange="toggleAll()"></th>
-                                <th>Nazwa hosta</th>
+                                <th>Host Name</th>
                                 <th>Host</th>
                                 <th>Status</th>
-                                <th>Tagi</th>
-                                <th>Akcje</th>
+                                <th>Tags</th>
+                                <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody id="hostsTable">
@@ -90,9 +90,9 @@
                                 <td>{{ host.host }}</td>
                                 <td>
                                     {% if host.status == "0" %}
-                                        <span class="badge bg-success">Aktywny</span>
+                                        <span class="badge bg-success">Enabled</span>
                                     {% else %}
-                                        <span class="badge bg-danger">Nieaktywny</span>
+                                        <span class="badge bg-danger">Disabled</span>
                                     {% endif %}
                                 </td>
                                 <td>
@@ -104,7 +104,7 @@
                                 </td>
                                 <td>
                                     <a href="{{ url_for('host_tags', host_id=host.hostid) }}" class="btn btn-sm btn-outline-primary">
-                                        <i class="fas fa-edit"></i> Zarządzaj tagami
+                                        <i class="fas fa-edit"></i> Manage tags
                                     </a>
                                 </td>
                             </tr>
@@ -114,7 +114,7 @@
                 </div>
                 {% else %}
                 <div class="alert alert-info">
-                    <i class="fas fa-info-circle"></i> Nie znaleziono hostów lub wystąpił błąd podczas pobierania danych.
+                    <i class="fas fa-info-circle"></i> No hosts found or error fetching data.
                 </div>
                 {% endif %}
             </div>
@@ -123,18 +123,18 @@
 </div>
 
 <script>
-// Funkcje wyszukiwania i filtrowania
+// Search and filter functions
 document.getElementById('searchHosts').addEventListener('input', filterHosts);
 document.getElementById('filterByTag').addEventListener('input', filterHosts);
 
-// Dodaj event listenery do checkbox'ów hostów po załadowaniu strony
+// Add event listeners to host checkboxes after page load
 document.addEventListener('DOMContentLoaded', function() {
-    // Dodaj event listener do każdego checkbox'a hosta
+    // Add event listener to each host checkbox
     document.querySelectorAll('.host-checkbox').forEach(checkbox => {
         checkbox.addEventListener('change', updateSelectAllCheckbox);
     });
 
-    // Sprawdź stan filtrów po załadowaniu strony i zastosuj je
+    // Check filter state after page load and apply them
     initializeFiltersOnLoad();
 });
 
@@ -143,10 +143,10 @@ function initializeFiltersOnLoad() {
     const tagFilter = document.getElementById('filterByTag').value.trim();
 
     if (searchTerm || tagFilter) {
-        // Jeśli są wartości w filtrach, zastosuj filtrowanie
+        // If there are values in filters, apply filtering
         filterHosts();
     } else {
-        // Jeśli filtry są puste, ukryj przycisk "Wyczyść"
+        // If filters are empty, hide "Clear" button
         document.getElementById('clearFiltersBtn').style.display = 'none';
     }
 }
@@ -163,7 +163,7 @@ function filterHosts() {
         const hostName = row.getAttribute('data-host-name');
         const hostTags = row.getAttribute('data-host-tags');
 
-        if (hostName && hostTags !== null) { // Sprawdź czy to wiersz z danymi hostów
+        if (hostName && hostTags !== null) { // Check if this is a row with host data
             totalCount++;
 
             const matchesSearch = !searchTerm || hostName.includes(searchTerm);
@@ -174,7 +174,7 @@ function filterHosts() {
                 visibleCount++;
             } else {
                 row.style.display = 'none';
-                // Odznacz ukryte hosty
+                // Uncheck hidden hosts
                 const checkbox = row.querySelector('.host-checkbox');
                 if (checkbox) {
                     checkbox.checked = false;
@@ -183,10 +183,10 @@ function filterHosts() {
         }
     });
 
-    // Zaktualizuj status filtrowania
+    // Update filter status
     updateFilterStatus(searchTerm, tagFilter, visibleCount, totalCount);
 
-    // Zaktualizuj stan głównego checkbox'a po filtrowaniu
+    // Update main checkbox state after filtering
     updateSelectAllCheckbox();
 }
 
@@ -197,7 +197,7 @@ function updateFilterStatus(searchTerm, tagFilter, visibleCount, totalCount) {
     const hasFilters = searchTerm || tagFilter;
 
     if (hasFilters) {
-        statusElement.textContent = `Pokazano ${visibleCount} z ${totalCount} hostów`;
+        statusElement.textContent = `Showing ${visibleCount} of ${totalCount} hosts`;
         clearBtn.style.display = '';
     } else {
         statusElement.textContent = '';
@@ -205,32 +205,32 @@ function updateFilterStatus(searchTerm, tagFilter, visibleCount, totalCount) {
     }
 }
 
-// Funkcja czyszczenia filtrów
+// Clear filters function
 function clearFilters() {
-    // Wyczyść pola wyszukiwania
+    // Clear search fields
     document.getElementById('searchHosts').value = '';
     document.getElementById('filterByTag').value = '';
 
-    // Pokaż wszystkie wiersze
+    // Show all rows
     const rows = document.querySelectorAll('#hostsTable tr');
     let totalCount = 0;
 
     rows.forEach(row => {
         const hostName = row.getAttribute('data-host-name');
-        if (hostName) { // Tylko wiersze z danymi hostów
+        if (hostName) { // Only rows with host data
             totalCount++;
         }
         row.style.display = '';
     });
 
-    // Zaktualizuj status filtrowania
+    // Update filter status
     updateFilterStatus('', '', totalCount, totalCount);
 
-    // Zaktualizuj stan głównego checkbox'a
+    // Update main checkbox state
     updateSelectAllCheckbox();
 }
 
-// Funkcja do aktualizacji stanu głównego checkbox'a
+// Function to update main checkbox state
 function updateSelectAllCheckbox() {
     const visibleCheckboxes = [];
     document.querySelectorAll('#hostsTable tr').forEach(row => {
@@ -260,9 +260,9 @@ function updateSelectAllCheckbox() {
     }
 }
 
-// Funkcje zaznaczania - tylko widoczne hosty
+// Selection functions - only visible hosts
 function selectAll() {
-    // Zaznacz tylko checkbox'y w widocznych wierszach
+    // Select only checkboxes in visible rows
     document.querySelectorAll('#hostsTable tr').forEach(row => {
         if (row.style.display !== 'none') {
             const checkbox = row.querySelector('.host-checkbox');
@@ -275,7 +275,7 @@ function selectAll() {
 }
 
 function deselectAll() {
-    // Odznacz tylko checkbox'y w widocznych wierszach
+    // Uncheck only checkboxes in visible rows
     document.querySelectorAll('#hostsTable tr').forEach(row => {
         if (row.style.display !== 'none') {
             const checkbox = row.querySelector('.host-checkbox');
@@ -289,7 +289,7 @@ function deselectAll() {
 
 function toggleAll() {
     const selectAll = document.getElementById('selectAllCheckbox').checked;
-    // Toggle tylko checkbox'y w widocznych wierszach
+    // Toggle only checkboxes in visible rows
     document.querySelectorAll('#hostsTable tr').forEach(row => {
         if (row.style.display !== 'none') {
             const checkbox = row.querySelector('.host-checkbox');
@@ -300,23 +300,23 @@ function toggleAll() {
     });
 }
 
-// Operacje masowe
+// Bulk operations
 function bulkAddTags() {
     const tagName = document.getElementById('bulkTagName').value.trim();
     const tagValue = document.getElementById('bulkTagValue').value.trim();
 
     if (!tagName) {
-        alert('Podaj nazwę tagu');
+        alert('Please provide a tag name');
         return;
     }
 
     const selectedHosts = getSelectedHosts();
     if (selectedHosts.length === 0) {
-        alert('Zaznacz przynajmniej jeden host');
+        alert('Please select at least one host');
         return;
     }
 
-    if (confirm(`Czy na pewno chcesz dodać tag "${tagName}" do ${selectedHosts.length} hostów?`)) {
+    if (confirm(`Are you sure you want to add tag "${tagName}" to ${selectedHosts.length} hosts?`)) {
         bulkOperation('add', selectedHosts, tagName, tagValue);
     }
 }
@@ -325,17 +325,17 @@ function bulkRemoveTags() {
     const tagName = document.getElementById('bulkTagName').value.trim();
 
     if (!tagName) {
-        alert('Podaj nazwę tagu');
+        alert('Please provide a tag name');
         return;
     }
 
     const selectedHosts = getSelectedHosts();
     if (selectedHosts.length === 0) {
-        alert('Zaznacz przynajmniej jeden host');
+        alert('Please select at least one host');
         return;
     }
 
-    if (confirm(`Czy na pewno chcesz usunąć tag "${tagName}" z ${selectedHosts.length} hostów?`)) {
+    if (confirm(`Are you sure you want to remove tag "${tagName}" from ${selectedHosts.length} hosts?`)) {
         bulkOperation('remove', selectedHosts, tagName, '');
     }
 }
@@ -365,12 +365,12 @@ function bulkOperation(operation, hostIds, tagName, tagValue) {
             alert(data.message);
             location.reload();
         } else {
-            alert('Błąd: ' + data.message);
+            alert('Error: ' + data.message);
         }
     })
     .catch(error => {
         console.error('Error in bulkOperation:', error);
-        alert('Wystąpił błąd podczas operacji');
+        alert('An error occurred during the operation');
     });
 }
 </script>

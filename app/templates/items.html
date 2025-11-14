@@ -3,7 +3,7 @@
 {% block content %}
 <div class="row">
     <div class="col-md-12">
-        <h2><i class="fas fa-exclamation-triangle"></i> Manage Triggers</h2>
+        <h2><i class="fas fa-chart-line"></i> Manage Items</h2>
 
         <!-- Search and filters bar -->
         <div class="card mb-4">
@@ -13,7 +13,7 @@
             <div class="card-body">
                 <div class="row">
                     <div class="col-md-5">
-                        <input type="text" id="searchTriggers" class="form-control" placeholder="Search by trigger name...">
+                        <input type="text" id="searchItems" class="form-control" placeholder="Search by item name...">
                     </div>
                     <div class="col-md-5">
                         <input type="text" id="filterByTag" class="form-control" placeholder="Filter by tag...">
@@ -32,7 +32,7 @@
             </div>
         </div>
 
-        <!-- Bulk Operations -->
+        <!-- Bulk operations -->
         <div class="card mb-4">
             <div class="card-header">
                 <h5><i class="fas fa-cogs"></i> Bulk Operations</h5>
@@ -57,10 +57,10 @@
             </div>
         </div>
 
-        <!-- Triggers List -->
+        <!-- Items list -->
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <h5><i class="fas fa-list"></i> Triggers List</h5>
+                <h5><i class="fas fa-list"></i> Items List</h5>
                 <div class="d-flex align-items-center gap-3">
                     {% if total_count > 0 %}
                     <div class="d-flex align-items-center">
@@ -85,32 +85,34 @@
                     <div class="spinner-border text-primary" role="status">
                         <span class="visually-hidden">Loading...</span>
                     </div>
-                    <p class="mt-2">Loading triggers...</p>
+                    <p class="mt-2">Loading items...</p>
                 </div>
-                {% if triggers %}
+                {% if items %}
                 <div class="table-responsive">
                     <table class="table table-striped table-hover">
                         <thead class="table-dark">
                             <tr>
                                 <th><input type="checkbox" id="selectAllCheckbox" onchange="toggleAll()"></th>
-                                <th>Trigger Description</th>
+                                <th>Item Name</th>
+                                <th>Key</th>
                                 <th>Host</th>
-                                <th>Priority</th>
+                                <th>Type</th>
                                 <th>Status</th>
                                 <th>Tags</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
-                        <tbody id="triggersTable">
-                            {% for trigger in triggers %}
-                            <tr data-trigger-name="{{ trigger.description|lower }}" data-trigger-tags="{% for tag in trigger.tags %}{{ tag.tag|lower }} {% endfor %}">
+                        <tbody id="itemsTable">
+                            {% for item in items %}
+                            <tr data-item-name="{{ item.name|lower }}" data-item-tags="{% for tag in item.tags %}{{ tag.tag|lower }} {% endfor %}">
                                 <td>
-                                    <input type="checkbox" class="trigger-checkbox" value="{{ trigger.triggerid }}">
+                                    <input type="checkbox" class="item-checkbox" value="{{ item.itemid }}">
                                 </td>
-                                <td>{{ trigger.description }}</td>
+                                <td>{{ item.name }}</td>
+                                <td><code class="small">{{ item.key_ }}</code></td>
                                 <td>
-                                    {% if trigger.hosts %}
-                                        {% for host in trigger.hosts %}
+                                    {% if item.hosts %}
+                                        {% for host in item.hosts %}
                                             <small class="text-muted">{{ host.name }}</small>{% if not loop.last %}<br>{% endif %}
                                         {% endfor %}
                                     {% else %}
@@ -118,38 +120,42 @@
                                     {% endif %}
                                 </td>
                                 <td>
-                                    {% if trigger.priority == "0" %}
-                                        <span class="badge bg-secondary">Not classified</span>
-                                    {% elif trigger.priority == "1" %}
-                                        <span class="badge bg-info">Information</span>
-                                    {% elif trigger.priority == "2" %}
-                                        <span class="badge bg-warning">Warning</span>
-                                    {% elif trigger.priority == "3" %}
-                                        <span class="badge bg-warning">Average</span>
-                                    {% elif trigger.priority == "4" %}
-                                        <span class="badge bg-danger">High</span>
-                                    {% elif trigger.priority == "5" %}
-                                        <span class="badge bg-danger">Disaster</span>
+                                    {% if item.type == "0" %}
+                                        <span class="badge bg-primary">Zabbix agent</span>
+                                    {% elif item.type == "2" %}
+                                        <span class="badge bg-info">Zabbix trapper</span>
+                                    {% elif item.type == "3" %}
+                                        <span class="badge bg-secondary">Simple check</span>
+                                    {% elif item.type == "7" %}
+                                        <span class="badge bg-success">Zabbix agent (active)</span>
+                                    {% elif item.type == "10" %}
+                                        <span class="badge bg-warning">External check</span>
+                                    {% elif item.type == "15" %}
+                                        <span class="badge bg-info">Calculated</span>
+                                    {% elif item.type == "19" %}
+                                        <span class="badge bg-primary">HTTP agent</span>
+                                    {% elif item.type == "20" %}
+                                        <span class="badge bg-success">SNMP agent</span>
                                     {% else %}
-                                        <span class="badge bg-secondary">{{ trigger.priority }}</span>
+                                        <span class="badge bg-secondary">Type {{ item.type }}</span>
                                     {% endif %}
                                 </td>
                                 <td>
-                                    {% if trigger.status == "0" %}
+                                    {% if item.status == "0" %}
                                         <span class="badge bg-success">Enabled</span>
                                     {% else %}
                                         <span class="badge bg-danger">Disabled</span>
                                     {% endif %}
                                 </td>
                                 <td>
-                                    {% for tag in trigger.tags %}
+                                    {% for tag in item.tags %}
                                         <span class="badge bg-primary me-1">
                                             {{ tag.tag }}{% if tag.value %}: {{ tag.value }}{% endif %}
                                         </span>
                                     {% endfor %}
                                 </td>
                                 <td>
-                                    <a href="{{ url_for('trigger_tags', trigger_id=trigger.triggerid) }}" class="btn btn-sm btn-outline-primary">
+                                    <a href="{{ url_for('item_tags', item_id=item.itemid) }}" class="btn btn-sm btn-outline-primary">
                                         <i class="fas fa-edit"></i> Manage tags
                                     </a>
                                 </td>
@@ -162,11 +168,11 @@
                 <!-- Pagination -->
                 <div id="paginationContainer">
                     {% if total_pages > 1 %}
-                    <nav aria-label="Triggers pagination">
+                    <nav aria-label="Items pagination">
                         <ul class="pagination justify-content-center">
                             <!-- Previous page -->
                             <li class="page-item {{ 'disabled' if page == 1 else '' }}">
-                                <a class="page-link" href="{{ url_for('triggers', page=page-1, per_page=per_page) if page > 1 else '#' }}">
+                                <a class="page-link" href="{{ url_for('items', page=page-1, per_page=per_page) if page > 1 else '#' }}">
                                     <i class="fas fa-chevron-left"></i> Previous
                                 </a>
                             </li>
@@ -174,7 +180,7 @@
                             <!-- First page -->
                             {% if page > 3 %}
                             <li class="page-item">
-                                <a class="page-link" href="{{ url_for('triggers', page=1, per_page=per_page) }}">1</a>
+                                <a class="page-link" href="{{ url_for('items', page=1, per_page=per_page) }}">1</a>
                             </li>
                             {% if page > 4 %}
                             <li class="page-item disabled"><span class="page-link">...</span></li>
@@ -184,7 +190,7 @@
                             <!-- Pages around current -->
                             {% for p in range([1, page-2]|max, [total_pages+1, page+3]|min) %}
                             <li class="page-item {{ 'active' if p == page else '' }}">
-                                <a class="page-link" href="{{ url_for('triggers', page=p, per_page=per_page) }}">{{ p }}</a>
+                                <a class="page-link" href="{{ url_for('items', page=p, per_page=per_page) }}">{{ p }}</a>
                             </li>
                             {% endfor %}
 
@@ -194,24 +200,24 @@
                             <li class="page-item disabled"><span class="page-link">...</span></li>
                             {% endif %}
                             <li class="page-item">
-                                <a class="page-link" href="{{ url_for('triggers', page=total_pages, per_page=per_page) }}">{{ total_pages }}</a>
+                                <a class="page-link" href="{{ url_for('items', page=total_pages, per_page=per_page) }}">{{ total_pages }}</a>
                             </li>
                             {% endif %}
 
                             <!-- Next page -->
                             <li class="page-item {{ 'disabled' if page == total_pages else '' }}">
-                                <a class="page-link" href="{{ url_for('triggers', page=page+1, per_page=per_page) if page < total_pages else '#' }}">
+                                <a class="page-link" href="{{ url_for('items', page=page+1, per_page=per_page) if page < total_pages else '#' }}">
                                     Next <i class="fas fa-chevron-right"></i>
                                 </a>
                             </li>
                         </ul>
                     </nav>
 
-                    <!-- Pagination information -->
+                    <!-- Pagination info -->
                     <div class="text-center text-muted">
                         <small id="paginationInfo">
                             Page {{ page }} of {{ total_pages }}
-                            ({{ ((page-1) * per_page + 1) }} - {{ [total_count, page * per_page]|min }} of {{ total_count }} triggers)
+                            ({{ ((page-1) * per_page + 1) }} - {{ [total_count, page * per_page]|min }} of {{ total_count }} items)
                         </small>
                     </div>
                     {% endif %}
@@ -219,7 +225,7 @@
 
                 {% else %}
                 <div class="alert alert-info">
-                    <i class="fas fa-info-circle"></i> No triggers found or error fetching data.
+                    <i class="fas fa-info-circle"></i> No items found or error fetching data.
                 </div>
                 {% endif %}
             </div>
@@ -227,7 +233,7 @@
     </div>
 </div>
 
-<!-- Progress bar modal -->
+<!-- Progress modal -->
 <div class="modal fade" id="progressModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -250,70 +256,63 @@
 
 <script>
 // Search and filter functions
-document.getElementById('searchTriggers').addEventListener('input', filterTriggers);
-document.getElementById('filterByTag').addEventListener('input', filterTriggers);
+document.getElementById('searchItems').addEventListener('input', filterItems);
+document.getElementById('filterByTag').addEventListener('input', filterItems);
 
 // Show spinner during loading
 document.addEventListener('DOMContentLoaded', function() {
-    // Check if we have triggers
-    const triggersTable = document.getElementById('triggersTable');
+    const itemsTable = document.getElementById('itemsTable');
     const loadingSpinner = document.getElementById('loadingSpinner');
 
-    {% if not triggers %}
-        // If no triggers, show spinner for 2 seconds (loading simulation)
+    {% if not items %}
         loadingSpinner.style.display = 'block';
         setTimeout(() => {
             loadingSpinner.style.display = 'none';
         }, 2000);
     {% endif %}
 
-    // Add event listener to each trigger checkbox
-    document.querySelectorAll('.trigger-checkbox').forEach(checkbox => {
+    document.querySelectorAll('.item-checkbox').forEach(checkbox => {
         checkbox.addEventListener('change', updateSelectAllCheckbox);
     });
 
-    // Check filter state after page load and apply them
     initializeFiltersOnLoad();
 });
 
 function initializeFiltersOnLoad() {
-    const searchTerm = document.getElementById('searchTriggers').value.trim();
+    const searchTerm = document.getElementById('searchItems').value.trim();
     const tagFilter = document.getElementById('filterByTag').value.trim();
 
     if (searchTerm || tagFilter) {
-        // If there are values in filters, apply filtering
-        filterTriggers();
+        filterItems();
     } else {
-        // If filters are empty, hide "Clear" button
         document.getElementById('clearFiltersBtn').style.display = 'none';
     }
 }
 
-function filterTriggers() {
-    const searchTerm = document.getElementById('searchTriggers').value.toLowerCase();
+function filterItems() {
+    const searchTerm = document.getElementById('searchItems').value.toLowerCase();
     const tagFilter = document.getElementById('filterByTag').value.toLowerCase();
-    const rows = document.querySelectorAll('#triggersTable tr');
+    const rows = document.querySelectorAll('#itemsTable tr');
 
     let visibleCount = 0;
     let totalCount = 0;
 
     rows.forEach(row => {
-        const triggerName = row.getAttribute('data-trigger-name');
-        const triggerTags = row.getAttribute('data-trigger-tags');
+        const itemName = row.getAttribute('data-item-name');
+        const itemTags = row.getAttribute('data-item-tags');
 
-        if (triggerName && triggerTags !== null) { // Check if it's a row with trigger data
+        if (itemName && itemTags !== null) {
             totalCount++;
 
-            const matchesSearch = !searchTerm || triggerName.includes(searchTerm);
-            const matchesTag = !tagFilter || (triggerTags && triggerTags.includes(tagFilter));
+            const matchesSearch = !searchTerm || itemName.includes(searchTerm);
+            const matchesTag = !tagFilter || (itemTags && itemTags.includes(tagFilter));
 
             if (matchesSearch && matchesTag) {
                 row.style.display = '';
                 visibleCount++;
             } else {
                 row.style.display = 'none';
-                // Uncheck hidden triggers
-                const checkbox = row.querySelector('.trigger-checkbox');
+                const checkbox = row.querySelector('.item-checkbox');
                 if (checkbox) {
                     checkbox.checked = false;
                 }
@@ -321,10 +320,7 @@ function filterTriggers() {
         }
     });
 
-    // Update filter status
     updateFilterStatus(searchTerm, tagFilter, visibleCount, totalCount);
-
-    // Update main checkbox state after filtering
     updateSelectAllCheckbox();
 }
 
@@ -336,53 +332,44 @@ function updateFilterStatus(searchTerm, tagFilter, visibleCount, totalCount) {
     const hasFilters = searchTerm || tagFilter;
 
     if (hasFilters) {
-        statusElement.textContent = `Showing ${visibleCount} of ${totalCount} triggers`;
+        statusElement.textContent = `Showing ${visibleCount} of ${totalCount} items`;
         clearBtn.style.display = '';
-        // Hide pagination during filtering
         if (paginationContainer) {
             paginationContainer.style.display = 'none';
         }
     } else {
         statusElement.textContent = '';
         clearBtn.style.display = 'none';
-        // Show pagination when no filters
         if (paginationContainer) {
             paginationContainer.style.display = '';
         }
     }
 }
 
-// Clear filters function
 function clearFilters() {
-    // Clear search fields
-    document.getElementById('searchTriggers').value = '';
+    document.getElementById('searchItems').value = '';
     document.getElementById('filterByTag').value = '';
 
-    // Show all rows
-    const rows = document.querySelectorAll('#triggersTable tr');
+    const rows = document.querySelectorAll('#itemsTable tr');
     let totalCount = 0;
 
     rows.forEach(row => {
-        const triggerName = row.getAttribute('data-trigger-name');
-        if (triggerName) { // Only rows with trigger data
+        const itemName = row.getAttribute('data-item-name');
+        if (itemName) {
             totalCount++;
         }
         row.style.display = '';
     });
 
-    // Update filter status
     updateFilterStatus('', '', totalCount, totalCount);
-
-    // Update main checkbox state
     updateSelectAllCheckbox();
 }
 
-// Function to update main checkbox state
 function updateSelectAllCheckbox() {
     const visibleCheckboxes = [];
-    document.querySelectorAll('#triggersTable tr').forEach(row => {
+    document.querySelectorAll('#itemsTable tr').forEach(row => {
         if (row.style.display !== 'none') {
-            const checkbox = row.querySelector('.trigger-checkbox');
+            const checkbox = row.querySelector('.item-checkbox');
             if (checkbox) {
                 visibleCheckboxes.push(checkbox);
             }
@@ -407,12 +394,10 @@ function updateSelectAllCheckbox() {
     }
 }
 
-// Selection functions - only visible triggers
 function selectAll() {
-    // Check only checkboxes in visible rows
-    document.querySelectorAll('#triggersTable tr').forEach(row => {
+    document.querySelectorAll('#itemsTable tr').forEach(row => {
         if (row.style.display !== 'none') {
-            const checkbox = row.querySelector('.trigger-checkbox');
+            const checkbox = row.querySelector('.item-checkbox');
             if (checkbox) {
                 checkbox.checked = true;
             }
@@ -422,10 +407,9 @@ function selectAll() {
 }
 
 function deselectAll() {
-    // Uncheck only checkboxes in visible rows
-    document.querySelectorAll('#triggersTable tr').forEach(row => {
+    document.querySelectorAll('#itemsTable tr').forEach(row => {
         if (row.style.display !== 'none') {
-            const checkbox = row.querySelector('.trigger-checkbox');
+            const checkbox = row.querySelector('.item-checkbox');
             if (checkbox) {
                 checkbox.checked = false;
             }
@@ -436,10 +420,9 @@ function deselectAll() {
 
 function toggleAll() {
     const selectAll = document.getElementById('selectAllCheckbox').checked;
-    // Toggle only checkboxes in visible rows
-    document.querySelectorAll('#triggersTable tr').forEach(row => {
+    document.querySelectorAll('#itemsTable tr').forEach(row => {
         if (row.style.display !== 'none') {
-            const checkbox = row.querySelector('.trigger-checkbox');
+            const checkbox = row.querySelector('.item-checkbox');
             if (checkbox) {
                 checkbox.checked = selectAll;
             }
@@ -457,14 +440,14 @@ function bulkAddTags() {
         return;
     }
 
-    const selectedTriggers = getSelectedTriggers();
-    if (selectedTriggers.length === 0) {
-        alert('Please select at least one trigger');
+    const selectedItems = getSelectedItems();
+    if (selectedItems.length === 0) {
+        alert('Please select at least one item');
         return;
     }
 
-    if (confirm(`Are you sure you want to add tag "${tagName}" to ${selectedTriggers.length} triggers?`)) {
-        bulkOperation('add', selectedTriggers, tagName, tagValue);
+    if (confirm(`Are you sure you want to add tag "${tagName}" to ${selectedItems.length} items?`)) {
+        bulkOperation('add', selectedItems, tagName, tagValue);
     }
 }
 
@@ -476,23 +459,22 @@ function bulkRemoveTags() {
         return;
     }
 
-    const selectedTriggers = getSelectedTriggers();
-    if (selectedTriggers.length === 0) {
-        alert('Please select at least one trigger');
+    const selectedItems = getSelectedItems();
+    if (selectedItems.length === 0) {
+        alert('Please select at least one item');
         return;
     }
 
-    if (confirm(`Are you sure you want to remove tag "${tagName}" from ${selectedTriggers.length} triggers?`)) {
-        bulkOperation('remove', selectedTriggers, tagName, '');
+    if (confirm(`Are you sure you want to remove tag "${tagName}" from ${selectedItems.length} items?`)) {
+        bulkOperation('remove', selectedItems, tagName, '');
     }
 }
 
-function getSelectedTriggers() {
-    return Array.from(document.querySelectorAll('.trigger-checkbox:checked')).map(cb => cb.value);
+function getSelectedItems() {
+    return Array.from(document.querySelectorAll('.item-checkbox:checked')).map(cb => cb.value);
 }
 
-async function bulkOperation(operation, triggerIds, tagName, tagValue) {
-    // Show modal with progress bar
+async function bulkOperation(operation, itemIds, tagName, tagValue) {
     const progressModal = new bootstrap.Modal(document.getElementById('progressModal'));
     const progressBar = document.querySelector('.progress-bar');
     const progressText = document.getElementById('progressText');
@@ -501,31 +483,30 @@ async function bulkOperation(operation, triggerIds, tagName, tagValue) {
     const progressTitle = document.getElementById('progressModalTitle');
 
     progressTitle.textContent = operation === 'add' ? 'Adding Tags' : 'Removing Tags';
-    progressText.textContent = `${operation === 'add' ? 'Adding' : 'Removing'} tag "${tagName}" ${operation === 'add' ? 'to' : 'from'} triggers...`;
-    progressCount.textContent = `0 / ${triggerIds.length}`;
+    progressText.textContent = `${operation === 'add' ? 'Adding' : 'Removing'} tag "${tagName}" ${operation === 'add' ? 'to' : 'from'} items...`;
+    progressCount.textContent = `0 / ${itemIds.length}`;
     progressPercent.textContent = '0%';
     progressBar.style.width = '0%';
 
     progressModal.show();
 
     try {
-        // Process triggers in small batches to show progress
         const batchSize = 10;
         let processed = 0;
         let successful = 0;
 
-        for (let i = 0; i < triggerIds.length; i += batchSize) {
-            const batch = triggerIds.slice(i, i + batchSize);
+        for (let i = 0; i < itemIds.length; i += batchSize) {
+            const batch = itemIds.slice(i, i + batchSize);
 
             const payload = {
                 operation: operation,
-                trigger_ids: batch,
+                item_ids: batch,
                 tag: tagName,
                 value: tagValue
             };
 
             try {
-                const response = await fetch('/api/triggers/tags/bulk', {
+                const response = await fetch('/api/items/tags/bulk', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -535,7 +516,6 @@ async function bulkOperation(operation, triggerIds, tagName, tagValue) {
 
                 const data = await response.json();
                 if (data.success) {
-                    // Extract number from message e.g. "Tag added to 5 triggers"
                     const matches = data.message.match(/(\d+)/);
                     const batchSuccessful = matches ? parseInt(matches[1]) : 0;
                     successful += batchSuccessful;
@@ -543,10 +523,9 @@ async function bulkOperation(operation, triggerIds, tagName, tagValue) {
 
                 processed += batch.length;
 
-                // Update progress bar
-                const percent = Math.round((processed / triggerIds.length) * 100);
+                const percent = Math.round((processed / itemIds.length) * 100);
                 progressBar.style.width = percent + '%';
-                progressCount.textContent = `${processed} / ${triggerIds.length}`;
+                progressCount.textContent = `${processed} / ${itemIds.length}`;
                 progressPercent.textContent = percent + '%';
 
             } catch (error) {
@@ -554,15 +533,13 @@ async function bulkOperation(operation, triggerIds, tagName, tagValue) {
                 processed += batch.length;
             }
 
-            // Short pause to not overload server
             await new Promise(resolve => setTimeout(resolve, 100));
         }
 
-        // Hide modal and show result
         progressModal.hide();
 
         setTimeout(() => {
-            alert(`Operation completed. ${operation === 'add' ? 'Added' : 'Removed'} tag ${operation === 'add' ? 'to' : 'from'} ${successful} triggers.`);
+            alert(`Operation completed. ${operation === 'add' ? 'Added' : 'Removed'} tag ${operation === 'add' ? 'to' : 'from'} ${successful} items.`);
             location.reload();
         }, 500);
 
@@ -575,11 +552,10 @@ async function bulkOperation(operation, triggerIds, tagName, tagValue) {
     }
 }
 
-// Function to change number of items per page
 function changePerPage(newPerPage) {
     const currentUrl = new URL(window.location);
     currentUrl.searchParams.set('per_page', newPerPage);
-    currentUrl.searchParams.set('page', '1'); // Reset to first page
+    currentUrl.searchParams.set('page', '1');
     window.location.href = currentUrl.toString();
 }
 </script>

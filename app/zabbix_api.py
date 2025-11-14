@@ -436,3 +436,165 @@ class ZabbixAPI:
 
         triggers = self.make_request("trigger.get", params)
         return triggers if triggers else []
+
+    # ===============================
+    # METHODS FOR ITEMS
+    # ===============================
+
+    def get_items(self, limit: int = None, offset: int = None) -> List[Dict[str, Any]]:
+        """Fetch list of items with tags with optional pagination"""
+        params = {
+            "output": ["itemid", "name", "key_", "type", "status", "value_type", "delay"],
+            "selectTags": "extend",
+            "selectHosts": ["hostid", "name"],
+            "sortfield": "name",
+            "monitored": True
+        }
+
+        # Add pagination if provided
+        if limit is not None:
+            params["limit"] = limit
+        if offset is not None:
+            params["sortorder"] = "ASC"  # Required for stable pagination
+
+        items = self.make_request("item.get", params)
+        return items if items else []
+
+    def get_items_count(self) -> int:
+        """Fetch number of items"""
+        params = {
+            "countOutput": True,
+            "monitored": True
+        }
+
+        count = self.make_request("item.get", params)
+        return int(count) if count else 0
+
+    def get_item_details(self, item_id: int) -> Dict[str, Any]:
+        """Fetch item details with tags"""
+        params = {
+            "output": ["itemid", "name", "key_", "type", "status", "value_type", "delay", "units", "description"],
+            "selectTags": "extend",
+            "selectHosts": ["hostid", "name"],
+            "itemids": [item_id]
+        }
+
+        items = self.make_request("item.get", params)
+        return items[0] if items else {}
+
+    def add_tag_to_item(self, item_id: int, tag_name: str, tag_value: str = "") -> bool:
+        """Add tag to item"""
+        debug_print(f" add_tag_to_item() - item_id={item_id}, tag_name={tag_name}, tag_value={tag_value}")
+
+        item = self.get_item_details(item_id)
+        if not item:
+            debug_print(f" Item with ID {item_id} not found")
+            return False
+
+        debug_print(f" Found item: {item.get('name', 'Unknown')}")
+        current_tags = item.get('tags', [])
+        debug_print(f" Current item tags: {current_tags}")
+
+        # Check if tag already exists
+        for tag in current_tags:
+            if tag['tag'] == tag_name:
+                debug_print(f" Tag '{tag_name}' already exists")
+                return False
+
+        # Add new tag
+        new_tag = {"tag": tag_name, "value": tag_value}
+        current_tags.append(new_tag)
+        debug_print(f" New tags after adding: {current_tags}")
+
+        # Remove 'automatic' field from tags - Zabbix API doesn't accept this field in item.update
+        clean_tags = []
+        for tag in current_tags:
+            clean_tag = {"tag": tag["tag"], "value": tag["value"]}
+            clean_tags.append(clean_tag)
+
+        debug_print(f" Cleaned tags (without 'automatic'): {clean_tags}")
+
+        params = {
+            "itemid": item_id,
+            "tags": clean_tags
+        }
+
+        debug_print(f" Sending item.update with parameters: {params}")
+        result = self.make_request("item.update", params)
+        debug_print(f" Result of item.update: {result}")
+
+        return result is not None
+
+    def remove_tag_from_item(self, item_id: int, tag_name: str) -> bool:
+        """Remove tag from item"""
+        debug_print(f" remove_tag_from_item() - item_id={item_id}, tag_name={tag_name}")
+
+        item = self.get_item_details(item_id)
+        if not item:
+            debug_print(f" Item with ID {item_id} not found")
+            return False
+
+        current_tags = item.get('tags', [])
+        debug_print(f" Current item tags: {current_tags}")
+
+        updated_tags = [tag for tag in current_tags if tag['tag'] != tag_name]
+        debug_print(f" Tags after removal: {updated_tags}")
+
+        if len(updated_tags) == len(current_tags):
+            debug_print(f" Tag '{tag_name}' does not exist")
+            return False
+
+        # Remove 'automatic' field from tags
+        clean_tags = []
+        for tag in updated_tags:
+            clean_tag = {"tag": tag["tag"], "value": tag["value"]}
+            clean_tags.append(clean_tag)
+
+        debug_print(f" Cleaned tags (without 'automatic'): {clean_tags}")
+
+        params = {
+            "itemid": item_id,
+            "tags": clean_tags
+        }
+
+        debug_print(f" Sending item.update with parameters: {params}")
+        result = self.make_request("item.update", params)
+        debug_print(f" Result of item.update: {result}")
+
+        return result is not None
+
+    def bulk_add_tags_to_items(self, item_ids: List[int], tag_name: str, tag_value: str = "") -> int:
+        """Bulk add tags to items"""
+        success_count = 0
+
+        for item_id in item_ids:
+            if self.add_tag_to_item(item_id, tag_name, tag_value):
+                success_count += 1
+
+        return success_count
+
+    def bulk_remove_tags_from_items(self, item_ids: List[int], tag_name: str) -> int:
+        """Bulk remove tags from items"""
+        success_count = 0
+
+        for item_id in item_ids:
+            if self.remove_tag_from_item(item_id, tag_name):
+                success_count += 1
+
+        return success_count
+
+    def search_items_by_tag(self, tag_name: str, tag_value: str = None) -> List[Dict[str, Any]]:
+        """Search items by tag"""
+        params = {
+            "output": ["itemid", "name", "key_", "type", "status"],
+            "selectTags": "extend",
+            "selectHosts": ["hostid", "name"],
+            "tags": [{"tag": tag_name}],
+            "monitored": True
+        }
+
+        if tag_value:
+            params["tags"][0]["value"] = tag_value
+
+        items = self.make_request("item.get", params)
+        return items if items else []

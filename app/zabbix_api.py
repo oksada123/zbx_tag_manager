@@ -8,6 +8,21 @@ def debug_print(message: str):
     if os.getenv('DEBUG_ENABLED', 'false').lower() in ['true', '1', 'yes', 'on']:
         print(f"DEBUG: {message}")
 
+def validate_tag_input(tag_name: str, tag_value: str = "") -> bool:
+    """Validate tag name and value"""
+    if not tag_name or not isinstance(tag_name, str):
+        return False
+    if tag_name.strip() == "":
+        return False
+    if len(tag_name) > 255:  # Zabbix limit
+        return False
+    if len(tag_value) > 255:  # Zabbix limit
+        return False
+    return True
+
+# Maximum number of items for bulk operations
+MAX_BULK_SIZE = 1000
+
 class ZabbixAPI:
     def __init__(self):
         self.url = os.getenv('ZABBIX_URL')
@@ -60,7 +75,7 @@ class ZabbixAPI:
             print(f"Connection error: {e}")
             return False
 
-    def make_request(self, method: str, params: Dict[str, Any]) -> Optional[Any]:
+    def make_request(self, method: str, params: Dict[str, Any], retry_count: int = 0) -> Optional[Any]:
         """Execute request to Zabbix API"""
         debug_print(f"make_request() method={method}, auth_token={self.auth_token}")
 
@@ -101,11 +116,11 @@ class ZabbixAPI:
                 error_message = error.get('data', error.get('message', 'Unknown error'))
                 print(f"API error: {error_message}")
 
-                # If authentication error, clear token and try again
-                if 'authentication' in error_message.lower() or 'session' in error_message.lower():
+                # If authentication error, clear token and try again (max 1 retry)
+                if retry_count < 1 and ('authentication' in error_message.lower() or 'session' in error_message.lower()):
                     self.auth_token = None
                     if method != "user.login":
-                        return self.make_request(method, params)
+                        return self.make_request(method, params, retry_count + 1)
 
                 return None
         except requests.RequestException as e:
@@ -153,6 +168,15 @@ class ZabbixAPI:
         """Add tag to host"""
         debug_print(f" add_tag_to_host() - host_id={host_id}, tag_name={tag_name}, tag_value={tag_value}")
 
+        # Validate input
+        if not validate_tag_input(tag_name, tag_value):
+            debug_print(f" Invalid tag input: tag_name='{tag_name}', tag_value='{tag_value}'")
+            return False
+
+        if not isinstance(host_id, int) or host_id <= 0:
+            debug_print(f" Invalid host_id: {host_id}")
+            return False
+
         host = self.get_host_details(host_id)
         if not host:
             debug_print(f" Host with ID {host_id} not found")
@@ -196,6 +220,15 @@ class ZabbixAPI:
         """Remove tag from host"""
         debug_print(f" remove_tag_from_host() - host_id={host_id}, tag_name={tag_name}")
 
+        # Validate input
+        if not tag_name or not isinstance(tag_name, str) or tag_name.strip() == "":
+            debug_print(f" Invalid tag_name: '{tag_name}'")
+            return False
+
+        if not isinstance(host_id, int) or host_id <= 0:
+            debug_print(f" Invalid host_id: {host_id}")
+            return False
+
         host = self.get_host_details(host_id)
         if not host:
             debug_print(f" Host with ID {host_id} not found")
@@ -232,6 +265,13 @@ class ZabbixAPI:
 
     def bulk_add_tags(self, host_ids: List[int], tag_name: str, tag_value: str = "") -> int:
         """Bulk add tags to hosts"""
+        if not host_ids or len(host_ids) == 0:
+            return 0
+
+        if len(host_ids) > MAX_BULK_SIZE:
+            debug_print(f" Bulk operation limited to {MAX_BULK_SIZE} items (requested: {len(host_ids)})")
+            host_ids = host_ids[:MAX_BULK_SIZE]
+
         success_count = 0
 
         for host_id in host_ids:
@@ -242,6 +282,13 @@ class ZabbixAPI:
 
     def bulk_remove_tags(self, host_ids: List[int], tag_name: str) -> int:
         """Bulk remove tags from hosts"""
+        if not host_ids or len(host_ids) == 0:
+            return 0
+
+        if len(host_ids) > MAX_BULK_SIZE:
+            debug_print(f" Bulk operation limited to {MAX_BULK_SIZE} items (requested: {len(host_ids)})")
+            host_ids = host_ids[:MAX_BULK_SIZE]
+
         success_count = 0
 
         for host_id in host_ids:
@@ -324,6 +371,15 @@ class ZabbixAPI:
         """Add tag to trigger"""
         debug_print(f" add_tag_to_trigger() - trigger_id={trigger_id}, tag_name={tag_name}, tag_value={tag_value}")
 
+        # Validate input
+        if not validate_tag_input(tag_name, tag_value):
+            debug_print(f" Invalid tag input: tag_name='{tag_name}', tag_value='{tag_value}'")
+            return False
+
+        if not isinstance(trigger_id, int) or trigger_id <= 0:
+            debug_print(f" Invalid trigger_id: {trigger_id}")
+            return False
+
         trigger = self.get_trigger_details(trigger_id)
         if not trigger:
             debug_print(f" Trigger with ID {trigger_id} not found")
@@ -367,6 +423,15 @@ class ZabbixAPI:
         """Remove tag from trigger"""
         debug_print(f" remove_tag_from_trigger() - trigger_id={trigger_id}, tag_name={tag_name}")
 
+        # Validate input
+        if not tag_name or not isinstance(tag_name, str) or tag_name.strip() == "":
+            debug_print(f" Invalid tag_name: '{tag_name}'")
+            return False
+
+        if not isinstance(trigger_id, int) or trigger_id <= 0:
+            debug_print(f" Invalid trigger_id: {trigger_id}")
+            return False
+
         trigger = self.get_trigger_details(trigger_id)
         if not trigger:
             debug_print(f" Trigger with ID {trigger_id} not found")
@@ -403,6 +468,13 @@ class ZabbixAPI:
 
     def bulk_add_tags_to_triggers(self, trigger_ids: List[int], tag_name: str, tag_value: str = "") -> int:
         """Bulk add tags to triggers"""
+        if not trigger_ids or len(trigger_ids) == 0:
+            return 0
+
+        if len(trigger_ids) > MAX_BULK_SIZE:
+            debug_print(f" Bulk operation limited to {MAX_BULK_SIZE} items (requested: {len(trigger_ids)})")
+            trigger_ids = trigger_ids[:MAX_BULK_SIZE]
+
         success_count = 0
 
         for trigger_id in trigger_ids:
@@ -413,6 +485,13 @@ class ZabbixAPI:
 
     def bulk_remove_tags_from_triggers(self, trigger_ids: List[int], tag_name: str) -> int:
         """Bulk remove tags from triggers"""
+        if not trigger_ids or len(trigger_ids) == 0:
+            return 0
+
+        if len(trigger_ids) > MAX_BULK_SIZE:
+            debug_print(f" Bulk operation limited to {MAX_BULK_SIZE} items (requested: {len(trigger_ids)})")
+            trigger_ids = trigger_ids[:MAX_BULK_SIZE]
+
         success_count = 0
 
         for trigger_id in trigger_ids:
@@ -486,6 +565,15 @@ class ZabbixAPI:
         """Add tag to item"""
         debug_print(f" add_tag_to_item() - item_id={item_id}, tag_name={tag_name}, tag_value={tag_value}")
 
+        # Validate input
+        if not validate_tag_input(tag_name, tag_value):
+            debug_print(f" Invalid tag input: tag_name='{tag_name}', tag_value='{tag_value}'")
+            return False
+
+        if not isinstance(item_id, int) or item_id <= 0:
+            debug_print(f" Invalid item_id: {item_id}")
+            return False
+
         item = self.get_item_details(item_id)
         if not item:
             debug_print(f" Item with ID {item_id} not found")
@@ -529,6 +617,15 @@ class ZabbixAPI:
         """Remove tag from item"""
         debug_print(f" remove_tag_from_item() - item_id={item_id}, tag_name={tag_name}")
 
+        # Validate input
+        if not tag_name or not isinstance(tag_name, str) or tag_name.strip() == "":
+            debug_print(f" Invalid tag_name: '{tag_name}'")
+            return False
+
+        if not isinstance(item_id, int) or item_id <= 0:
+            debug_print(f" Invalid item_id: {item_id}")
+            return False
+
         item = self.get_item_details(item_id)
         if not item:
             debug_print(f" Item with ID {item_id} not found")
@@ -565,6 +662,13 @@ class ZabbixAPI:
 
     def bulk_add_tags_to_items(self, item_ids: List[int], tag_name: str, tag_value: str = "") -> int:
         """Bulk add tags to items"""
+        if not item_ids or len(item_ids) == 0:
+            return 0
+
+        if len(item_ids) > MAX_BULK_SIZE:
+            debug_print(f" Bulk operation limited to {MAX_BULK_SIZE} items (requested: {len(item_ids)})")
+            item_ids = item_ids[:MAX_BULK_SIZE]
+
         success_count = 0
 
         for item_id in item_ids:
@@ -575,6 +679,13 @@ class ZabbixAPI:
 
     def bulk_remove_tags_from_items(self, item_ids: List[int], tag_name: str) -> int:
         """Bulk remove tags from items"""
+        if not item_ids or len(item_ids) == 0:
+            return 0
+
+        if len(item_ids) > MAX_BULK_SIZE:
+            debug_print(f" Bulk operation limited to {MAX_BULK_SIZE} items (requested: {len(item_ids)})")
+            item_ids = item_ids[:MAX_BULK_SIZE]
+
         success_count = 0
 
         for item_id in item_ids:

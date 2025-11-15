@@ -53,8 +53,17 @@ def host_tags(host_id):
 @app.route('/api/host/<int:host_id>/tags', methods=['POST'])
 def add_tag(host_id):
     try:
+        if not request.json:
+            return jsonify({'success': False, 'message': 'Invalid request - JSON required'})
+
         tag_name = request.json.get('tag')
         tag_value = request.json.get('value', '')
+
+        if not tag_name or not isinstance(tag_name, str) or tag_name.strip() == '':
+            return jsonify({'success': False, 'message': 'Tag name is required'})
+
+        if len(tag_name) > 255 or len(tag_value) > 255:
+            return jsonify({'success': False, 'message': 'Tag name or value too long (max 255 characters)'})
 
         zabbix = ZabbixAPI()
         if not zabbix.authenticate():
@@ -71,6 +80,9 @@ def add_tag(host_id):
 @app.route('/api/host/<int:host_id>/tags/<tag_name>', methods=['DELETE'])
 def remove_tag(host_id, tag_name):
     try:
+        if not tag_name or tag_name.strip() == '':
+            return jsonify({'success': False, 'message': 'Tag name is required'})
+
         zabbix = ZabbixAPI()
         if not zabbix.authenticate():
             return jsonify({'success': False, 'message': 'Authorization error'})
@@ -86,10 +98,22 @@ def remove_tag(host_id, tag_name):
 @app.route('/api/hosts/tags/bulk', methods=['POST'])
 def bulk_tag_operation():
     try:
+        if not request.json:
+            return jsonify({'success': False, 'message': 'Invalid request - JSON required'})
+
         operation = request.json.get('operation')
         host_ids = request.json.get('host_ids', [])
         tag_name = request.json.get('tag')
         tag_value = request.json.get('value', '')
+
+        if not tag_name or not isinstance(tag_name, str) or tag_name.strip() == '':
+            return jsonify({'success': False, 'message': 'Tag name is required'})
+
+        if not host_ids or not isinstance(host_ids, list) or len(host_ids) == 0:
+            return jsonify({'success': False, 'message': 'No hosts selected'})
+
+        if len(tag_name) > 255 or len(tag_value) > 255:
+            return jsonify({'success': False, 'message': 'Tag name or value too long (max 255 characters)'})
 
         zabbix = ZabbixAPI()
         if not zabbix.authenticate():
@@ -178,8 +202,17 @@ def trigger_tags(trigger_id):
 @app.route('/api/trigger/<int:trigger_id>/tags', methods=['POST'])
 def add_tag_to_trigger(trigger_id):
     try:
+        if not request.json:
+            return jsonify({'success': False, 'message': 'Invalid request - JSON required'})
+
         tag_name = request.json.get('tag')
         tag_value = request.json.get('value', '')
+
+        if not tag_name or not isinstance(tag_name, str) or tag_name.strip() == '':
+            return jsonify({'success': False, 'message': 'Tag name is required'})
+
+        if len(tag_name) > 255 or len(tag_value) > 255:
+            return jsonify({'success': False, 'message': 'Tag name or value too long (max 255 characters)'})
 
         zabbix = ZabbixAPI()
         if not zabbix.authenticate():
@@ -196,6 +229,9 @@ def add_tag_to_trigger(trigger_id):
 @app.route('/api/trigger/<int:trigger_id>/tags/<tag_name>', methods=['DELETE'])
 def remove_tag_from_trigger(trigger_id, tag_name):
     try:
+        if not tag_name or tag_name.strip() == '':
+            return jsonify({'success': False, 'message': 'Tag name is required'})
+
         zabbix = ZabbixAPI()
         if not zabbix.authenticate():
             return jsonify({'success': False, 'message': 'Authorization error'})
@@ -211,10 +247,22 @@ def remove_tag_from_trigger(trigger_id, tag_name):
 @app.route('/api/triggers/tags/bulk', methods=['POST'])
 def bulk_trigger_operation():
     try:
+        if not request.json:
+            return jsonify({'success': False, 'message': 'Invalid request - JSON required'})
+
         operation = request.json.get('operation')
         trigger_ids = request.json.get('trigger_ids', [])
         tag_name = request.json.get('tag')
         tag_value = request.json.get('value', '')
+
+        if not tag_name or not isinstance(tag_name, str) or tag_name.strip() == '':
+            return jsonify({'success': False, 'message': 'Tag name is required'})
+
+        if not trigger_ids or not isinstance(trigger_ids, list) or len(trigger_ids) == 0:
+            return jsonify({'success': False, 'message': 'No triggers selected'})
+
+        if len(tag_name) > 255 or len(tag_value) > 255:
+            return jsonify({'success': False, 'message': 'Tag name or value too long (max 255 characters)'})
 
         zabbix = ZabbixAPI()
         if not zabbix.authenticate():
@@ -303,8 +351,17 @@ def item_tags(item_id):
 @app.route('/api/item/<int:item_id>/tags', methods=['POST'])
 def add_tag_to_item(item_id):
     try:
+        if not request.json:
+            return jsonify({'success': False, 'message': 'Invalid request - JSON required'})
+
         tag_name = request.json.get('tag')
         tag_value = request.json.get('value', '')
+
+        if not tag_name or not isinstance(tag_name, str) or tag_name.strip() == '':
+            return jsonify({'success': False, 'message': 'Tag name is required'})
+
+        if len(tag_name) > 255 or len(tag_value) > 255:
+            return jsonify({'success': False, 'message': 'Tag name or value too long (max 255 characters)'})
 
         zabbix = ZabbixAPI()
         if not zabbix.authenticate():
@@ -321,6 +378,9 @@ def add_tag_to_item(item_id):
 @app.route('/api/item/<int:item_id>/tags/<tag_name>', methods=['DELETE'])
 def remove_tag_from_item(item_id, tag_name):
     try:
+        if not tag_name or tag_name.strip() == '':
+            return jsonify({'success': False, 'message': 'Tag name is required'})
+
         zabbix = ZabbixAPI()
         if not zabbix.authenticate():
             return jsonify({'success': False, 'message': 'Authorization error'})
@@ -336,10 +396,22 @@ def remove_tag_from_item(item_id, tag_name):
 @app.route('/api/items/tags/bulk', methods=['POST'])
 def bulk_item_operation():
     try:
+        if not request.json:
+            return jsonify({'success': False, 'message': 'Invalid request - JSON required'})
+
         operation = request.json.get('operation')
         item_ids = request.json.get('item_ids', [])
         tag_name = request.json.get('tag')
         tag_value = request.json.get('value', '')
+
+        if not tag_name or not isinstance(tag_name, str) or tag_name.strip() == '':
+            return jsonify({'success': False, 'message': 'Tag name is required'})
+
+        if not item_ids or not isinstance(item_ids, list) or len(item_ids) == 0:
+            return jsonify({'success': False, 'message': 'No items selected'})
+
+        if len(tag_name) > 255 or len(tag_value) > 255:
+            return jsonify({'success': False, 'message': 'Tag name or value too long (max 255 characters)'})
 
         zabbix = ZabbixAPI()
         if not zabbix.authenticate():
@@ -363,4 +435,6 @@ def bulk_item_operation():
         return jsonify({'success': False, 'message': str(e)})
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5001)
+    # Production mode - debug disabled
+    debug_mode = os.getenv('DEBUG_ENABLED', 'false').lower() in ['true', '1', 'yes', 'on']
+    app.run(debug=debug_mode, host='0.0.0.0', port=5001)

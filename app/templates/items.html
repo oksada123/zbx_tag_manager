@@ -6,27 +6,42 @@
         <h2><i class="fas fa-chart-line"></i> Manage Items</h2>
 
         <!-- Search and filters bar -->
-        <div class="card mb-4">
+        <div class="card mb-5">
             <div class="card-header">
                 <h5><i class="fas fa-search"></i> Search and Filters</h5>
             </div>
             <div class="card-body">
                 <div class="row">
-                    <div class="col-md-5">
+                    <div class="col-md-4">
                         <input type="text" id="searchItems" class="form-control" placeholder="Search by item name...">
                     </div>
-                    <div class="col-md-5">
+                    <div class="col-md-3">
                         <input type="text" id="filterByTag" class="form-control" placeholder="Filter by tag...">
                     </div>
-                    <div class="col-md-2">
-                        <button id="clearFiltersBtn" class="btn btn-outline-secondary w-100" onclick="clearFilters()">
-                            <i class="fas fa-times"></i> Clear
-                        </button>
+                    <div class="col-md-5">
+                        <div class="input-group">
+                            <select id="filterByHost" class="form-select" multiple="multiple" style="flex: 1;">
+                                {% for host in all_hosts %}
+                                <option value="{{ host.hostid }}">{{ host.name }}</option>
+                                {% endfor %}
+                            </select>
+                            <button class="btn btn-outline-secondary" type="button" onclick="selectAllHosts()" title="Select all hosts">
+                                <i class="fas fa-check-double"></i>
+                            </button>
+                            <button class="btn btn-outline-secondary" type="button" onclick="clearHostSelection()" title="Clear host selection">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
                     </div>
                 </div>
                 <div class="row mt-2">
                     <div class="col-md-12">
-                        <small id="filterStatus" class="text-muted"></small>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <small id="filterStatus" class="text-muted"></small>
+                            <button id="clearFiltersBtn" class="btn btn-sm btn-outline-secondary" onclick="clearFilters()" style="display: none;">
+                                <i class="fas fa-times"></i> Clear All Filters
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -114,17 +129,19 @@
                         </thead>
                         <tbody id="itemsTable">
                             {% for item in items %}
-                            <tr data-item-name="{{ item.name|lower }}" data-item-tags="{% for tag in item.tags %}{{ tag.tag|lower }} {% endfor %}">
+                            {% set host = item.host if item.host else (item.hosts[0] if item.hosts else None) %}
+                            <tr data-item-name="{{ item.name|lower }}"
+                                data-item-tags="{% for tag in item.tags %}{{ tag.tag|lower }} {% endfor %}"
+                                data-host-id="{{ host.hostid if host else '' }}">
                                 <td>
-                                    <input type="checkbox" class="item-checkbox" value="{{ item.itemid }}">
+                                    <input type="checkbox" class="item-checkbox"
+                                           value="{{ item.itemid }}:{{ host.hostid if host else '0' }}">
                                 </td>
                                 <td>{{ item.name }}</td>
                                 <td><code class="small">{{ item.key_ }}</code></td>
                                 <td>
-                                    {% if item.hosts %}
-                                        {% for host in item.hosts %}
-                                            <small class="text-muted">{{ host.name }}</small>{% if not loop.last %}<br>{% endif %}
-                                        {% endfor %}
+                                    {% if host %}
+                                        <small class="text-muted">{{ host.name }}</small>
                                     {% else %}
                                         <span class="text-muted">No host</span>
                                     {% endif %}
@@ -259,6 +276,37 @@ document.addEventListener('DOMContentLoaded', function() {
     // Restore bulk fields from localStorage on page load
     restoreBulkFieldsFromStorage();
 
+    // Initialize Select2 for host filter
+    $('#filterByHost').select2({
+        placeholder: 'Filter by host...',
+        allowClear: true,
+        theme: 'bootstrap-5',
+        width: '100%',
+        closeOnSelect: false
+    });
+
+    // Add event listener for Select2 change
+    $('#filterByHost').on('change', function() {
+        filterItems();
+    });
+
+    // Add "Select All Filtered" button inside dropdown when opened
+    $('#filterByHost').on('select2:open', function() {
+        setTimeout(() => {
+            const dropdown = $('.select2-dropdown');
+            if (!dropdown.find('.select-all-filtered-btn').length) {
+                const buttonHtml = `
+                    <div class="select-all-filtered-btn" style="padding: 8px 12px; border-bottom: 1px solid #dee2e6; background: #f8f9fa;">
+                        <button type="button" class="btn btn-sm btn-outline-primary w-100" onclick="selectFilteredHosts(); event.stopPropagation();">
+                            <i class="fas fa-check-double me-1"></i> Select All Filtered
+                        </button>
+                    </div>
+                `;
+                dropdown.prepend(buttonHtml);
+            }
+        }, 10);
+    });
+
     // Add search and filter listeners
     document.getElementById('searchItems').addEventListener('input', filterItems);
     document.getElementById('filterByTag').addEventListener('input', filterItems);
@@ -267,17 +315,25 @@ document.addEventListener('DOMContentLoaded', function() {
 function initializeFiltersOnLoad() {
     const searchTerm = document.getElementById('searchItems').value.trim();
     const tagFilter = document.getElementById('filterByTag').value.trim();
+    const selectedHosts = getSelectedHosts();
 
-    if (searchTerm || tagFilter) {
+    if (searchTerm || tagFilter || selectedHosts.length > 0) {
         filterItems();
     } else {
         document.getElementById('clearFiltersBtn').style.display = 'none';
     }
 }
 
+// Get selected host IDs from Select2
+function getSelectedHosts() {
+    const selectedValues = $('#filterByHost').val();
+    return selectedValues ? selectedValues : [];
+}
+
 function filterItems() {
     const searchTerm = document.getElementById('searchItems').value.toLowerCase();
     const tagFilter = document.getElementById('filterByTag').value.toLowerCase();
+    const selectedHosts = getSelectedHosts();
     const rows = document.querySelectorAll('#itemsTable tr');
 
     let visibleCount = 0;
@@ -286,14 +342,16 @@ function filterItems() {
     rows.forEach(row => {
         const itemName = row.getAttribute('data-item-name');
         const itemTags = row.getAttribute('data-item-tags');
+        const hostId = row.getAttribute('data-host-id');
 
         if (itemName && itemTags !== null) {
             totalCount++;
 
             const matchesSearch = !searchTerm || itemName.includes(searchTerm);
             const matchesTag = !tagFilter || (itemTags && itemTags.includes(tagFilter));
+            const matchesHost = selectedHosts.length === 0 || selectedHosts.includes(hostId);
 
-            if (matchesSearch && matchesTag) {
+            if (matchesSearch && matchesTag && matchesHost) {
                 row.style.display = '';
                 visibleCount++;
             } else {
@@ -306,7 +364,7 @@ function filterItems() {
         }
     });
 
-    updateFilterStatus(searchTerm, tagFilter, visibleCount, totalCount);
+    updateFilterStatus(searchTerm, tagFilter, selectedHosts.length, visibleCount, totalCount);
     updateSelectAllCheckbox();
 
     // Re-paginate after filtering (if pagination is initialized)
@@ -315,16 +373,21 @@ function filterItems() {
     }
 }
 
-function updateFilterStatus(searchTerm, tagFilter, visibleCount, totalCount) {
+function updateFilterStatus(searchTerm, tagFilter, hostCount, visibleCount, totalCount) {
     const statusElement = document.getElementById('filterStatus');
     const clearBtn = document.getElementById('clearFiltersBtn');
     const paginationContainerTop = document.getElementById('paginationContainerTop');
     const paginationContainerBottom = document.getElementById('paginationContainerBottom');
 
-    const hasFilters = searchTerm || tagFilter;
+    const hasFilters = searchTerm || tagFilter || hostCount > 0;
 
     if (hasFilters) {
-        statusElement.textContent = `Showing ${visibleCount} of ${totalCount} items`;
+        let statusParts = [];
+        if (searchTerm) statusParts.push(`name: "${searchTerm}"`);
+        if (tagFilter) statusParts.push(`tag: "${tagFilter}"`);
+        if (hostCount > 0) statusParts.push(`${hostCount} host${hostCount > 1 ? 's' : ''}`);
+
+        statusElement.textContent = `Showing ${visibleCount} of ${totalCount} items (filtered by ${statusParts.join(', ')})`;
         clearBtn.style.display = '';
         // Hide pagination during filtering
         if (paginationContainerTop) paginationContainerTop.style.display = 'none';
@@ -342,6 +405,9 @@ function clearFilters() {
     document.getElementById('searchItems').value = '';
     document.getElementById('filterByTag').value = '';
 
+    // Clear Select2
+    $('#filterByHost').val(null).trigger('change');
+
     const rows = document.querySelectorAll('#itemsTable tr');
     let totalCount = 0;
 
@@ -353,13 +419,95 @@ function clearFilters() {
         row.style.display = '';
     });
 
-    updateFilterStatus('', '', totalCount, totalCount);
+    updateFilterStatus('', '', 0, totalCount, totalCount);
     updateSelectAllCheckbox();
 
     // Re-paginate after clearing filters
     if (typeof showPage === 'function' && allRows.length > 0) {
         showPage(1);
     }
+}
+
+// Select all hosts in Select2 (respects active search filter)
+function selectAllHosts() {
+    const select2Instance = $('#filterByHost').data('select2');
+
+    // Check if dropdown is open and has search text
+    let searchText = '';
+    if (select2Instance && select2Instance.$dropdown) {
+        const searchField = select2Instance.$dropdown.find('.select2-search__field');
+        if (searchField.length) {
+            searchText = searchField.val() || '';
+        }
+    }
+
+    if (searchText.trim() !== '') {
+        // Select only filtered (visible) options matching the search
+        const filteredHostIds = [];
+        const searchLower = searchText.toLowerCase();
+
+        $('#filterByHost option').each(function() {
+            const optionText = $(this).text().toLowerCase();
+            if (optionText.includes(searchLower)) {
+                filteredHostIds.push($(this).val());
+            }
+        });
+
+        // Merge with already selected hosts
+        const currentSelection = $('#filterByHost').val() || [];
+        const mergedSelection = [...new Set([...currentSelection, ...filteredHostIds])];
+
+        $('#filterByHost').val(mergedSelection).trigger('change');
+    } else {
+        // Select all hosts
+        const allHostIds = [];
+        $('#filterByHost option').each(function() {
+            allHostIds.push($(this).val());
+        });
+        $('#filterByHost').val(allHostIds).trigger('change');
+    }
+}
+
+// Clear host selection in Select2
+function clearHostSelection() {
+    $('#filterByHost').val(null).trigger('change');
+}
+
+// Select only filtered hosts (based on current search in Select2)
+function selectFilteredHosts() {
+    // Get current search text from Select2
+    const searchField = $('.select2-search__field');
+    const searchText = searchField.length ? searchField.val() || '' : '';
+
+    if (searchText.trim() === '') {
+        // No search filter - select all
+        selectAllHosts();
+        return;
+    }
+
+    // Find options matching the search
+    const filteredHostIds = [];
+    const searchLower = searchText.toLowerCase().trim();
+
+    $('#filterByHost option').each(function() {
+        const optionText = $(this).text().toLowerCase();
+        if (optionText.includes(searchLower)) {
+            filteredHostIds.push($(this).val());
+        }
+    });
+
+    if (filteredHostIds.length === 0) {
+        return; // No matches
+    }
+
+    // Merge with already selected hosts (don't lose previous selection)
+    const currentSelection = $('#filterByHost').val() || [];
+    const mergedSelection = [...new Set([...currentSelection, ...filteredHostIds])];
+
+    $('#filterByHost').val(mergedSelection).trigger('change');
+
+    // Keep the dropdown open
+    $('#filterByHost').select2('open');
 }
 
 function updateSelectAllCheckbox() {

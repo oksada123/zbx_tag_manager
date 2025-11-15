@@ -31,12 +31,10 @@ body {
 .card {
     border: none;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 
 .card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 5px 25px rgba(0, 0, 0, 0.15);
+    /* No transform - static cards for clean UI */
 }
 
 .card-header {
@@ -49,13 +47,11 @@ body {
 /* Buttons */
 .btn {
     font-weight: 500;
-    transition: all 0.3s ease;
     border-radius: 5px;
 }
 
 .btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    /* No transform - buttons stay in place for clean UI */
 }
 
 .btn-primary {
@@ -246,10 +242,8 @@ body {
     border-radius: 3px;
 }
 
-/* Smooth transitions for all interactive elements */
-* {
-    transition: all 0.3s ease;
-}
+/* Clean UI - no global transitions that cause unwanted animations */
+/* Specific transitions are defined per element where needed */
 
 /* Footer spacing */
 body {

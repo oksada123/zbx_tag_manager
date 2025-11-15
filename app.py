@@ -307,23 +307,50 @@ def items():
         debug_print("Attempting to log in...")
         if not zabbix.authenticate():
             flash('Cannot connect to Zabbix API. Check configuration in .env file', 'error')
-            return render_template('items.html', items=[], per_page=per_page)
+            return render_template('items.html', items=[], all_hosts=[], per_page=per_page)
 
         debug_print("Fetching all items...")
         items_data = zabbix.get_items()
 
         if items_data is None:
             flash('Cannot retrieve data from Zabbix API', 'error')
-            return render_template('items.html', items=[], per_page=per_page)
+            return render_template('items.html', items=[], all_hosts=[], per_page=per_page)
 
-        debug_print(f"Retrieved {len(items_data)} items")
+        # Expand items to flat list: one row per item:host combination
+        expanded_items = []
+        all_hosts_dict = {}  # {hostid: {hostid, name}}
+
+        for item in items_data:
+            item_hosts = item.get('hosts', [])
+            if not item_hosts:
+                # Item without host - still show it
+                expanded_items.append(item)
+            else:
+                # Create one row per host
+                for host in item_hosts:
+                    # Track unique hosts
+                    all_hosts_dict[host['hostid']] = host
+
+                    # Create item copy with single host
+                    item_copy = item.copy()
+                    item_copy['host'] = host  # Single host object
+                    item_copy['hosts'] = [host]  # Keep as list for compatibility
+                    expanded_items.append(item_copy)
+
+        # Convert hosts dict to sorted list
+        all_hosts = sorted(all_hosts_dict.values(), key=lambda h: h['name'].lower())
+
+        debug_print(f"Retrieved {len(items_data)} items, expanded to {len(expanded_items)} rows")
+        debug_print(f"Found {len(all_hosts)} unique hosts")
+
         return render_template('items.html',
-                             items=items_data,
+                             items=expanded_items,
+                             all_hosts=all_hosts,
                              per_page=per_page)
     except Exception as e:
         debug_print(f"Exception in items(): {str(e)}")
         flash(f'Error while fetching items: {str(e)}', 'error')
-        return render_template('items.html', items=[], per_page=100)
+        return render_template('items.html', items=[], all_hosts=[], per_page=100)
 
 @app.route('/item/<int:item_id>/tags')
 def item_tags(item_id):
@@ -391,24 +418,42 @@ def bulk_item_operation():
             return jsonify({'success': False, 'message': 'Invalid request - JSON required'})
 
         operation = request.json.get('operation')
-        item_ids = request.json.get('item_ids', [])
+        item_ids_raw = request.json.get('item_ids', [])
         tag_name = request.json.get('tag')
         tag_value = request.json.get('value', '')
 
         if not tag_name or not isinstance(tag_name, str) or tag_name.strip() == '':
             return jsonify({'success': False, 'message': 'Tag name is required'})
 
-        if not item_ids or not isinstance(item_ids, list) or len(item_ids) == 0:
+        if not item_ids_raw or not isinstance(item_ids_raw, list) or len(item_ids_raw) == 0:
             return jsonify({'success': False, 'message': 'No items selected'})
 
-        # Convert item_ids to integers
+        # Parse item_ids - they are in format "itemid:hostid"
+        # Extract unique itemids (we operate on items, not item:host combinations)
+        item_ids = []
         try:
-            item_ids = [int(iid) for iid in item_ids]
-        except (ValueError, TypeError) as e:
-            return jsonify({'success': False, 'message': 'Invalid item IDs'})
+            for value in item_ids_raw:
+                value_str = str(value)
+                # Format is "itemid:hostid", extract itemid
+                if ':' in value_str:
+                    itemid = int(value_str.split(':')[0])
+                    item_ids.append(itemid)
+                else:
+                    # Fallback: try to convert directly
+                    item_ids.append(int(value_str))
+        except (ValueError, TypeError, AttributeError) as e:
+            return jsonify({'success': False, 'message': f'Invalid item IDs format: {str(e)}'})
+
+        if len(item_ids) == 0:
+            return jsonify({'success': False, 'message': 'No valid items selected'})
+
+        # Remove duplicates (same item on multiple hosts = multiple checkboxes)
+        item_ids = list(set(item_ids))
 
         if len(tag_name) > 255 or (tag_value and len(tag_value) > 255):
             return jsonify({'success': False, 'message': 'Tag name or value too long (max 255 characters)'})
+
+        debug_print(f"Bulk operation '{operation}' on {len(item_ids)} unique items: tag='{tag_name}'")
 
         zabbix = ZabbixAPI()
         if not zabbix.authenticate():

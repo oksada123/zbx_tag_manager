@@ -15,26 +15,29 @@ def index():
 @app.route('/hosts')
 def hosts():
     try:
+        # Get per_page parameter for client-side pagination
+        per_page = request.args.get('per_page', 100, type=int)
+
         debug_print("Creating new ZabbixAPI object...")
         zabbix = ZabbixAPI()
 
         debug_print("Attempting to log in...")
         if not zabbix.authenticate():
             flash('Cannot connect to Zabbix API. Check configuration in .env file', 'error')
-            return render_template('hosts.html', hosts=[])
+            return render_template('hosts.html', hosts=[], per_page=per_page)
 
-        debug_print("Fetching list of hosts...")
+        debug_print("Fetching all hosts...")
         hosts_data = zabbix.get_hosts()
         if hosts_data is None:
             flash('Cannot retrieve data from Zabbix API', 'error')
-            return render_template('hosts.html', hosts=[])
+            return render_template('hosts.html', hosts=[], per_page=per_page)
 
         debug_print(f"Retrieved {len(hosts_data)} hosts")
-        return render_template('hosts.html', hosts=hosts_data)
+        return render_template('hosts.html', hosts=hosts_data, per_page=per_page)
     except Exception as e:
         debug_print(f"Exception in hosts(): {str(e)}")
         flash(f'Error while fetching hosts: {str(e)}', 'error')
-        return render_template('hosts.html', hosts=[])
+        return render_template('hosts.html', hosts=[], per_page=100)
 
 @app.route('/host/<int:host_id>/tags')
 def host_tags(host_id):
@@ -62,7 +65,7 @@ def add_tag(host_id):
         if not tag_name or not isinstance(tag_name, str) or tag_name.strip() == '':
             return jsonify({'success': False, 'message': 'Tag name is required'})
 
-        if len(tag_name) > 255 or len(tag_value) > 255:
+        if len(tag_name) > 255 or (tag_value and len(tag_value) > 255):
             return jsonify({'success': False, 'message': 'Tag name or value too long (max 255 characters)'})
 
         zabbix = ZabbixAPI()
@@ -99,6 +102,7 @@ def remove_tag(host_id, tag_name):
 def bulk_tag_operation():
     try:
         if not request.json:
+            debug_print("ERROR: No JSON in request")
             return jsonify({'success': False, 'message': 'Invalid request - JSON required'})
 
         operation = request.json.get('operation')
@@ -106,13 +110,24 @@ def bulk_tag_operation():
         tag_name = request.json.get('tag')
         tag_value = request.json.get('value', '')
 
+        debug_print(f"Bulk operation: operation={operation}, host_ids={host_ids}, tag_name='{tag_name}', tag_value='{tag_value}'")
+
         if not tag_name or not isinstance(tag_name, str) or tag_name.strip() == '':
+            debug_print(f"ERROR: Invalid tag_name: '{tag_name}'")
             return jsonify({'success': False, 'message': 'Tag name is required'})
 
         if not host_ids or not isinstance(host_ids, list) or len(host_ids) == 0:
+            debug_print(f"ERROR: No hosts selected: {host_ids}")
             return jsonify({'success': False, 'message': 'No hosts selected'})
 
-        if len(tag_name) > 255 or len(tag_value) > 255:
+        # Convert host_ids to integers
+        try:
+            host_ids = [int(hid) for hid in host_ids]
+        except (ValueError, TypeError) as e:
+            debug_print(f"ERROR: Invalid host IDs: {host_ids}, error: {e}")
+            return jsonify({'success': False, 'message': 'Invalid host IDs'})
+
+        if len(tag_name) > 255 or (tag_value and len(tag_value) > 255):
             return jsonify({'success': False, 'message': 'Tag name or value too long (max 255 characters)'})
 
         zabbix = ZabbixAPI()
@@ -143,9 +158,8 @@ def bulk_tag_operation():
 @app.route('/triggers')
 def triggers():
     try:
-        # Get pagination parameters
-        page = request.args.get('page', 1, type=int)
-        per_page = request.args.get('per_page', 100, type=int)  # 100 triggers per page
+        # Get per_page parameter for client-side pagination
+        per_page = request.args.get('per_page', 100, type=int)
 
         debug_print("Creating new ZabbixAPI object for triggers...")
         zabbix = ZabbixAPI()
@@ -153,37 +167,23 @@ def triggers():
         debug_print("Attempting to log in...")
         if not zabbix.authenticate():
             flash('Cannot connect to Zabbix API. Check configuration in .env file', 'error')
-            return render_template('triggers.html', triggers=[], total_count=0, page=1, per_page=per_page, total_pages=1)
+            return render_template('triggers.html', triggers=[], per_page=per_page)
 
-        debug_print("Fetching number of triggers...")
-        total_count = zabbix.get_triggers_count()
-        debug_print(f"Total number of triggers: {total_count}")
-
-        if total_count == 0:
-            return render_template('triggers.html', triggers=[], total_count=0, page=1, per_page=per_page, total_pages=1)
-
-        # Calculate pagination
-        total_pages = (total_count + per_page - 1) // per_page
-        offset = (page - 1) * per_page
-
-        debug_print(f"Fetching triggers: page {page}/{total_pages}, offset {offset}, limit {per_page}...")
-        triggers_data = zabbix.get_triggers(limit=per_page, offset=offset)
+        debug_print("Fetching all triggers...")
+        triggers_data = zabbix.get_triggers()
 
         if triggers_data is None:
             flash('Cannot retrieve data from Zabbix API', 'error')
-            return render_template('triggers.html', triggers=[], total_count=0, page=1, per_page=per_page, total_pages=1)
+            return render_template('triggers.html', triggers=[], per_page=per_page)
 
-        debug_print(f"Retrieved {len(triggers_data)} triggers for page {page}")
+        debug_print(f"Retrieved {len(triggers_data)} triggers")
         return render_template('triggers.html',
                              triggers=triggers_data,
-                             total_count=total_count,
-                             page=page,
-                             per_page=per_page,
-                             total_pages=total_pages)
+                             per_page=per_page)
     except Exception as e:
         debug_print(f"Exception in triggers(): {str(e)}")
         flash(f'Error while fetching triggers: {str(e)}', 'error')
-        return render_template('triggers.html', triggers=[], total_count=0, page=1, per_page=100, total_pages=1)
+        return render_template('triggers.html', triggers=[], per_page=100)
 
 @app.route('/trigger/<int:trigger_id>/tags')
 def trigger_tags(trigger_id):
@@ -211,7 +211,7 @@ def add_tag_to_trigger(trigger_id):
         if not tag_name or not isinstance(tag_name, str) or tag_name.strip() == '':
             return jsonify({'success': False, 'message': 'Tag name is required'})
 
-        if len(tag_name) > 255 or len(tag_value) > 255:
+        if len(tag_name) > 255 or (tag_value and len(tag_value) > 255):
             return jsonify({'success': False, 'message': 'Tag name or value too long (max 255 characters)'})
 
         zabbix = ZabbixAPI()
@@ -261,7 +261,13 @@ def bulk_trigger_operation():
         if not trigger_ids or not isinstance(trigger_ids, list) or len(trigger_ids) == 0:
             return jsonify({'success': False, 'message': 'No triggers selected'})
 
-        if len(tag_name) > 255 or len(tag_value) > 255:
+        # Convert trigger_ids to integers
+        try:
+            trigger_ids = [int(tid) for tid in trigger_ids]
+        except (ValueError, TypeError) as e:
+            return jsonify({'success': False, 'message': 'Invalid trigger IDs'})
+
+        if len(tag_name) > 255 or (tag_value and len(tag_value) > 255):
             return jsonify({'success': False, 'message': 'Tag name or value too long (max 255 characters)'})
 
         zabbix = ZabbixAPI()
@@ -292,9 +298,8 @@ def bulk_trigger_operation():
 @app.route('/items')
 def items():
     try:
-        # Get pagination parameters
-        page = request.args.get('page', 1, type=int)
-        per_page = request.args.get('per_page', 100, type=int)  # 100 items per page
+        # Get per_page parameter for client-side pagination
+        per_page = request.args.get('per_page', 100, type=int)
 
         debug_print("Creating new ZabbixAPI object for items...")
         zabbix = ZabbixAPI()
@@ -302,37 +307,23 @@ def items():
         debug_print("Attempting to log in...")
         if not zabbix.authenticate():
             flash('Cannot connect to Zabbix API. Check configuration in .env file', 'error')
-            return render_template('items.html', items=[], total_count=0, page=1, per_page=per_page, total_pages=1)
+            return render_template('items.html', items=[], per_page=per_page)
 
-        debug_print("Fetching number of items...")
-        total_count = zabbix.get_items_count()
-        debug_print(f"Total number of items: {total_count}")
-
-        if total_count == 0:
-            return render_template('items.html', items=[], total_count=0, page=1, per_page=per_page, total_pages=1)
-
-        # Calculate pagination
-        total_pages = (total_count + per_page - 1) // per_page
-        offset = (page - 1) * per_page
-
-        debug_print(f"Fetching items: page {page}/{total_pages}, offset {offset}, limit {per_page}...")
-        items_data = zabbix.get_items(limit=per_page, offset=offset)
+        debug_print("Fetching all items...")
+        items_data = zabbix.get_items()
 
         if items_data is None:
             flash('Cannot retrieve data from Zabbix API', 'error')
-            return render_template('items.html', items=[], total_count=0, page=1, per_page=per_page, total_pages=1)
+            return render_template('items.html', items=[], per_page=per_page)
 
-        debug_print(f"Retrieved {len(items_data)} items for page {page}")
+        debug_print(f"Retrieved {len(items_data)} items")
         return render_template('items.html',
                              items=items_data,
-                             total_count=total_count,
-                             page=page,
-                             per_page=per_page,
-                             total_pages=total_pages)
+                             per_page=per_page)
     except Exception as e:
         debug_print(f"Exception in items(): {str(e)}")
         flash(f'Error while fetching items: {str(e)}', 'error')
-        return render_template('items.html', items=[], total_count=0, page=1, per_page=100, total_pages=1)
+        return render_template('items.html', items=[], per_page=100)
 
 @app.route('/item/<int:item_id>/tags')
 def item_tags(item_id):
@@ -360,7 +351,7 @@ def add_tag_to_item(item_id):
         if not tag_name or not isinstance(tag_name, str) or tag_name.strip() == '':
             return jsonify({'success': False, 'message': 'Tag name is required'})
 
-        if len(tag_name) > 255 or len(tag_value) > 255:
+        if len(tag_name) > 255 or (tag_value and len(tag_value) > 255):
             return jsonify({'success': False, 'message': 'Tag name or value too long (max 255 characters)'})
 
         zabbix = ZabbixAPI()
@@ -410,7 +401,13 @@ def bulk_item_operation():
         if not item_ids or not isinstance(item_ids, list) or len(item_ids) == 0:
             return jsonify({'success': False, 'message': 'No items selected'})
 
-        if len(tag_name) > 255 or len(tag_value) > 255:
+        # Convert item_ids to integers
+        try:
+            item_ids = [int(iid) for iid in item_ids]
+        except (ValueError, TypeError) as e:
+            return jsonify({'success': False, 'message': 'Invalid item IDs'})
+
+        if len(tag_name) > 255 or (tag_value and len(tag_value) > 255):
             return jsonify({'success': False, 'message': 'Tag name or value too long (max 255 characters)'})
 
         zabbix = ZabbixAPI()

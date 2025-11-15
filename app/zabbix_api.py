@@ -16,7 +16,7 @@ def validate_tag_input(tag_name: str, tag_value: str = "") -> bool:
         return False
     if len(tag_name) > 255:  # Zabbix limit
         return False
-    if len(tag_value) > 255:  # Zabbix limit
+    if tag_value and len(tag_value) > 255:  # Zabbix limit
         return False
     return True
 
@@ -132,14 +132,15 @@ class ZabbixAPI:
         params = {
             "output": ["hostid", "host", "name", "status"],
             "selectTags": "extend",
-            "sortfield": "name"
+            "sortfield": "name",
+            "sortorder": "ASC"  # Required for stable pagination
         }
 
         # Add pagination if provided
         if limit is not None:
             params["limit"] = limit
         if offset is not None:
-            params["sortorder"] = "ASC"  # Required for stable pagination
+            params["offset"] = offset
 
         hosts = self.make_request("host.get", params)
         return hosts if hosts else []
@@ -333,6 +334,7 @@ class ZabbixAPI:
             "selectTags": "extend",
             "selectHosts": ["hostid", "name"],
             "sortfield": "description",
+            "sortorder": "ASC",  # Required for stable pagination
             "expandDescription": True
         }
 
@@ -340,7 +342,7 @@ class ZabbixAPI:
         if limit is not None:
             params["limit"] = limit
         if offset is not None:
-            params["sortorder"] = "ASC"  # Required for stable pagination
+            params["offset"] = offset
 
         triggers = self.make_request("trigger.get", params)
         return triggers if triggers else []
@@ -527,6 +529,7 @@ class ZabbixAPI:
             "selectTags": "extend",
             "selectHosts": ["hostid", "name"],
             "sortfield": "name",
+            "sortorder": "ASC",  # Required for stable pagination
             "monitored": True
         }
 
@@ -534,7 +537,7 @@ class ZabbixAPI:
         if limit is not None:
             params["limit"] = limit
         if offset is not None:
-            params["sortorder"] = "ASC"  # Required for stable pagination
+            params["offset"] = offset
 
         items = self.make_request("item.get", params)
         return items if items else []

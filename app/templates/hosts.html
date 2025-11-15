@@ -49,9 +49,17 @@
                         <button class="btn btn-success me-2" onclick="bulkAddTags()">
                             <i class="fas fa-plus"></i> Add to selected
                         </button>
-                        <button class="btn btn-danger" onclick="bulkRemoveTags()">
+                        <button class="btn btn-danger me-2" onclick="bulkRemoveTags()">
                             <i class="fas fa-minus"></i> Remove from selected
                         </button>
+                        <button id="clearBulkBtn" class="btn btn-outline-secondary" onclick="clearBulkFields()" style="display: none;">
+                            <i class="fas fa-times"></i> Clear
+                        </button>
+                    </div>
+                </div>
+                <div class="row mt-2">
+                    <div class="col-md-12">
+                        <small id="bulkStatus" class="text-muted"></small>
                     </div>
                 </div>
             </div>
@@ -61,12 +69,26 @@
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5><i class="fas fa-list"></i> Hosts List</h5>
-                <div>
-                    <button class="btn btn-sm btn-outline-primary" onclick="selectAll()">Select all</button>
-                    <button class="btn btn-sm btn-outline-secondary" onclick="deselectAll()">Deselect all</button>
+                <div class="d-flex align-items-center gap-3">
+                    <div class="d-flex align-items-center">
+                        <label for="perPageSelect" class="form-label me-2 mb-0">Per page:</label>
+                        <select class="form-select form-select-sm" id="perPageSelect" onchange="changePerPage(this.value)">
+                            <option value="50" {{ 'selected' if per_page == 50 else '' }}>50</option>
+                            <option value="100" {{ 'selected' if per_page == 100 else '' }}>100</option>
+                            <option value="200" {{ 'selected' if per_page == 200 else '' }}>200</option>
+                            <option value="500" {{ 'selected' if per_page == 500 else '' }}>500</option>
+                        </select>
+                    </div>
+                    <div>
+                        <button class="btn btn-sm btn-outline-primary" onclick="selectAll()">Select all</button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="deselectAll()">Deselect all</button>
+                    </div>
                 </div>
             </div>
             <div class="card-body">
+                <!-- Pagination (top) -->
+                <div id="paginationContainerTop" class="mb-3"></div>
+
                 {% if hosts %}
                 <div class="table-responsive">
                     <table class="table table-striped table-hover">
@@ -112,6 +134,10 @@
                         </tbody>
                     </table>
                 </div>
+
+                <!-- Pagination (bottom) -->
+                <div id="paginationContainerBottom" class="mt-3"></div>
+
                 {% else %}
                 <div class="alert alert-info">
                     <i class="fas fa-info-circle"></i> No hosts found or error fetching data.
@@ -122,10 +148,47 @@
     </div>
 </div>
 
+<!-- Progress bar modal -->
+<div class="modal fade" id="progressModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="progressModalTitle">Bulk Operation</h5>
+            </div>
+            <div class="modal-body">
+                <div class="progress mb-3">
+                    <div class="progress-bar" role="progressbar" style="width: 0%"></div>
+                </div>
+                <p id="progressText">Preparing operation...</p>
+                <div class="d-flex justify-content-between">
+                    <small id="progressCount">0 / 0</small>
+                    <small id="progressPercent">0%</small>
+                </div>
+                <div class="mt-3">
+                    <button type="button" class="btn btn-danger w-100" id="cancelBulkBtn" onclick="cancelBulkOperation()">
+                        <i class="fas fa-times"></i> Cancel
+                    </button>
+                    <small class="text-muted d-block mt-2">
+                        <i class="fas fa-info-circle"></i> Note: Canceling will stop the operation, but tags already processed will remain.
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
-// Search and filter functions
-document.getElementById('searchHosts').addEventListener('input', filterHosts);
-document.getElementById('filterByTag').addEventListener('input', filterHosts);
+// Global flag for canceling bulk operations
+let cancelOperation = false;
+
+// Function to cancel bulk operation
+function cancelBulkOperation() {
+    if (confirm('Are you sure you want to cancel? Tags already processed will remain.')) {
+        cancelOperation = true;
+        document.getElementById('cancelBulkBtn').disabled = true;
+        document.getElementById('progressText').textContent = 'Canceling operation...';
+    }
+}
 
 // Add event listeners to host checkboxes after page load
 document.addEventListener('DOMContentLoaded', function() {
@@ -136,6 +199,21 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Check filter state after page load and apply them
     initializeFiltersOnLoad();
+
+    // Add event listeners for bulk operation fields
+    document.getElementById('bulkTagName').addEventListener('input', updateBulkClearButton);
+    document.getElementById('bulkTagValue').addEventListener('input', updateBulkClearButton);
+
+    // Add event listeners to save bulk fields to localStorage
+    document.getElementById('bulkTagName').addEventListener('input', saveBulkFieldsToStorage);
+    document.getElementById('bulkTagValue').addEventListener('input', saveBulkFieldsToStorage);
+
+    // Restore bulk fields from localStorage on page load
+    restoreBulkFieldsFromStorage();
+
+    // Add search and filter listeners
+    document.getElementById('searchHosts').addEventListener('input', filterHosts);
+    document.getElementById('filterByTag').addEventListener('input', filterHosts);
 });
 
 function initializeFiltersOnLoad() {
@@ -188,6 +266,11 @@ function filterHosts() {
 
     // Update main checkbox state after filtering
     updateSelectAllCheckbox();
+
+    // Re-paginate after filtering (if pagination is initialized)
+    if (typeof showPage === 'function' && allRows.length > 0) {
+        showPage(1);
+    }
 }
 
 function updateFilterStatus(searchTerm, tagFilter, visibleCount, totalCount) {
@@ -258,6 +341,8 @@ function updateSelectAllCheckbox() {
         selectAllCheckbox.checked = false;
         selectAllCheckbox.indeterminate = false;
     }
+
+    updateBulkStatus();
 }
 
 // Selection functions - only visible hosts
@@ -272,6 +357,7 @@ function selectAll() {
         }
     });
     document.getElementById('selectAllCheckbox').checked = true;
+    updateBulkStatus();
 }
 
 function deselectAll() {
@@ -285,6 +371,7 @@ function deselectAll() {
         }
     });
     document.getElementById('selectAllCheckbox').checked = false;
+    updateBulkStatus();
 }
 
 function toggleAll() {
@@ -298,6 +385,87 @@ function toggleAll() {
             }
         }
     });
+    updateBulkStatus();
+}
+
+// Update bulk status
+function updateBulkStatus() {
+    const selectedCheckboxes = [];
+    document.querySelectorAll('#hostsTable tr').forEach(row => {
+        if (row.style.display !== 'none') {
+            const checkbox = row.querySelector('.host-checkbox');
+            if (checkbox && checkbox.checked) {
+                selectedCheckboxes.push(checkbox);
+            }
+        }
+    });
+
+    const statusElement = document.getElementById('bulkStatus');
+    const count = selectedCheckboxes.length;
+
+    const tagName = document.getElementById('bulkTagName').value.trim();
+    const tagValue = document.getElementById('bulkTagValue').value.trim();
+    const hasInput = tagName || tagValue;
+
+    if (count > 0 || hasInput) {
+        if (count === 0) {
+            statusElement.textContent = 'No hosts selected';
+        } else if (count === 1) {
+            statusElement.textContent = '1 host selected';
+        } else {
+            statusElement.textContent = `${count} hosts selected`;
+        }
+    } else {
+        statusElement.textContent = '';
+    }
+}
+
+// Update bulk clear button visibility
+function updateBulkClearButton() {
+    const tagName = document.getElementById('bulkTagName').value.trim();
+    const tagValue = document.getElementById('bulkTagValue').value.trim();
+    const clearBtn = document.getElementById('clearBulkBtn');
+
+    if (tagName || tagValue) {
+        clearBtn.style.display = '';
+    } else {
+        clearBtn.style.display = 'none';
+    }
+
+    updateBulkStatus();
+}
+
+// Save bulk fields to localStorage
+function saveBulkFieldsToStorage() {
+    const tagName = document.getElementById('bulkTagName').value;
+    const tagValue = document.getElementById('bulkTagValue').value;
+    localStorage.setItem('bulkTagName_hosts', tagName);
+    localStorage.setItem('bulkTagValue_hosts', tagValue);
+}
+
+// Restore bulk fields from localStorage
+function restoreBulkFieldsFromStorage() {
+    const tagName = localStorage.getItem('bulkTagName_hosts') || '';
+    const tagValue = localStorage.getItem('bulkTagValue_hosts') || '';
+
+    if (tagName || tagValue) {
+        document.getElementById('bulkTagName').value = tagName;
+        document.getElementById('bulkTagValue').value = tagValue;
+        updateBulkClearButton();
+    }
+}
+
+// Clear bulk fields function
+function clearBulkFields() {
+    document.getElementById('bulkTagName').value = '';
+    document.getElementById('bulkTagValue').value = '';
+    document.getElementById('clearBulkBtn').style.display = 'none';
+
+    // Clear from localStorage
+    localStorage.removeItem('bulkTagName_hosts');
+    localStorage.removeItem('bulkTagValue_hosts');
+
+    updateBulkStatus();
 }
 
 // Bulk operations
@@ -344,34 +512,246 @@ function getSelectedHosts() {
     return Array.from(document.querySelectorAll('.host-checkbox:checked')).map(cb => cb.value);
 }
 
-function bulkOperation(operation, hostIds, tagName, tagValue) {
-    const payload = {
-        operation: operation,
-        host_ids: hostIds,
-        tag: tagName,
-        value: tagValue
-    };
+async function bulkOperation(operation, hostIds, tagName, tagValue) {
+    // Reset cancel flag
+    cancelOperation = false;
 
-    fetch('/api/hosts/tags/bulk', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload)
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            alert(data.message);
-            location.reload();
-        } else {
-            alert('Error: ' + data.message);
+    // Show modal with progress bar
+    const progressModal = new bootstrap.Modal(document.getElementById('progressModal'));
+    const progressBar = document.querySelector('.progress-bar');
+    const progressText = document.getElementById('progressText');
+    const progressCount = document.getElementById('progressCount');
+    const progressPercent = document.getElementById('progressPercent');
+    const progressTitle = document.getElementById('progressModalTitle');
+    const cancelBtn = document.getElementById('cancelBulkBtn');
+
+    progressTitle.textContent = operation === 'add' ? 'Adding Tags' : 'Removing Tags';
+    progressText.textContent = `${operation === 'add' ? 'Adding' : 'Removing'} tag "${tagName}" ${operation === 'add' ? 'to' : 'from'} hosts...`;
+    progressCount.textContent = `0 / ${hostIds.length}`;
+    progressPercent.textContent = '0%';
+    progressBar.style.width = '0%';
+    cancelBtn.disabled = false;
+
+    progressModal.show();
+
+    try {
+        // Process hosts in small batches to show progress
+        const batchSize = 10;
+        let processed = 0;
+        let successful = 0;
+
+        for (let i = 0; i < hostIds.length; i += batchSize) {
+            // Check if operation was canceled
+            if (cancelOperation) {
+                progressModal.hide();
+                setTimeout(() => {
+                    alert(`Operation canceled. ${operation === 'add' ? 'Added' : 'Removed'} tag ${operation === 'add' ? 'to' : 'from'} ${successful} of ${hostIds.length} hosts.`);
+                    location.reload();
+                }, 500);
+                return;
+            }
+
+            const batch = hostIds.slice(i, i + batchSize);
+
+            const payload = {
+                operation: operation,
+                host_ids: batch,
+                tag: tagName,
+                value: tagValue
+            };
+
+            try {
+                const response = await fetch('/api/hosts/tags/bulk', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    successful += batch.length;
+                }
+                processed += batch.length;
+
+                // Update progress
+                const percent = Math.round((processed / hostIds.length) * 100);
+                progressBar.style.width = `${percent}%`;
+                progressCount.textContent = `${processed} / ${hostIds.length}`;
+                progressPercent.textContent = `${percent}%`;
+
+            } catch (error) {
+                console.error('Error in batch:', error);
+                processed += batch.length;
+            }
+
+            // Short pause to not overload server
+            await new Promise(resolve => setTimeout(resolve, 100));
         }
-    })
-    .catch(error => {
+
+        // Hide modal and show result
+        progressModal.hide();
+
+        setTimeout(() => {
+            alert(`Operation completed. ${operation === 'add' ? 'Added' : 'Removed'} tag ${operation === 'add' ? 'to' : 'from'} ${successful} hosts.`);
+            location.reload();
+        }, 500);
+
+    } catch (error) {
+        progressModal.hide();
         console.error('Error in bulkOperation:', error);
-        alert('An error occurred during the operation');
+        setTimeout(() => {
+            alert('An error occurred during the operation');
+        }, 500);
+    }
+}
+
+// ========================================
+// CLIENT-SIDE PAGINATION
+// ========================================
+
+let currentPage = 1;
+let itemsPerPage = {{ per_page }};
+let allRows = [];
+
+// Initialize pagination on page load
+document.addEventListener('DOMContentLoaded', function() {
+    // Collect all table rows
+    allRows = Array.from(document.querySelectorAll('#hostsTable tr'));
+
+    // Initialize pagination
+    if (allRows.length > 0) {
+        renderPagination();
+        showPage(1);
+    }
+});
+
+// Function to show specific page
+function showPage(pageNum) {
+    currentPage = pageNum;
+
+    // Filter out hidden rows (by search/filter)
+    const visibleRows = allRows.filter(row => {
+        return row.style.display !== 'none' && row.getAttribute('data-host-name');
     });
+
+    const totalVisible = visibleRows.length;
+    const totalPages = Math.ceil(totalVisible / itemsPerPage);
+
+    // Validate page number
+    if (pageNum < 1) pageNum = 1;
+    if (pageNum > totalPages && totalPages > 0) pageNum = totalPages;
+    currentPage = pageNum;
+
+    const start = (pageNum - 1) * itemsPerPage;
+    const end = start + itemsPerPage;
+
+    // Hide all rows first
+    allRows.forEach(row => {
+        if (row.getAttribute('data-host-name')) {
+            row.classList.add('d-none');
+        }
+    });
+
+    // Show only rows for current page
+    visibleRows.slice(start, end).forEach(row => {
+        row.classList.remove('d-none');
+    });
+
+    // Re-render pagination
+    renderPagination();
+
+    // Update checkbox state
+    updateSelectAllCheckbox();
+}
+
+// Render pagination controls
+function renderPagination() {
+    const containerTop = document.getElementById('paginationContainerTop');
+    const containerBottom = document.getElementById('paginationContainerBottom');
+
+    // Filter visible rows
+    const visibleRows = allRows.filter(row => {
+        return row.style.display !== 'none' && row.getAttribute('data-host-name');
+    });
+
+    const totalItems = visibleRows.length;
+    const totalPages = Math.ceil(totalItems / itemsPerPage);
+
+    // Don't show pagination if only one page or no items
+    if (totalPages <= 1) {
+        if (containerTop) containerTop.innerHTML = '';
+        if (containerBottom) containerBottom.innerHTML = '';
+        return;
+    }
+
+    const start = (currentPage - 1) * itemsPerPage + 1;
+    const end = Math.min(currentPage * itemsPerPage, totalItems);
+
+    let html = '<nav aria-label="Hosts pagination"><ul class="pagination justify-content-center">';
+
+    // Previous button
+    html += `<li class="page-item ${currentPage === 1 ? 'disabled' : ''}">
+        <a class="page-link" href="#" onclick="showPage(${currentPage - 1}); return false;">
+            <i class="fas fa-chevron-left"></i> Previous
+        </a>
+    </li>`;
+
+    // First page
+    if (currentPage > 3) {
+        html += `<li class="page-item"><a class="page-link" href="#" onclick="showPage(1); return false;">1</a></li>`;
+        if (currentPage > 4) {
+            html += '<li class="page-item disabled"><span class="page-link">...</span></li>';
+        }
+    }
+
+    // Pages around current
+    const startPage = Math.max(1, currentPage - 2);
+    const endPage = Math.min(totalPages, currentPage + 2);
+
+    for (let i = startPage; i <= endPage; i++) {
+        html += `<li class="page-item ${i === currentPage ? 'active' : ''}">
+            <a class="page-link" href="#" onclick="showPage(${i}); return false;">${i}</a>
+        </li>`;
+    }
+
+    // Last page
+    if (currentPage < totalPages - 2) {
+        if (currentPage < totalPages - 3) {
+            html += '<li class="page-item disabled"><span class="page-link">...</span></li>';
+        }
+        html += `<li class="page-item"><a class="page-link" href="#" onclick="showPage(${totalPages}); return false;">${totalPages}</a></li>`;
+    }
+
+    // Next button
+    html += `<li class="page-item ${currentPage === totalPages ? 'disabled' : ''}">
+        <a class="page-link" href="#" onclick="showPage(${currentPage + 1}); return false;">
+            Next <i class="fas fa-chevron-right"></i>
+        </a>
+    </li>`;
+
+    html += '</ul></nav>';
+
+    // Pagination info
+    html += `<div class="text-center text-muted">
+        <small id="paginationInfo">
+            Page ${currentPage} of ${totalPages}
+            (${start} - ${end} of ${totalItems} hosts)
+        </small>
+    </div>`;
+
+    // Update both containers
+    if (containerTop) containerTop.innerHTML = html;
+    if (containerBottom) containerBottom.innerHTML = html;
+}
+
+// Function to change number of items per page
+function changePerPage(newPerPage) {
+    itemsPerPage = parseInt(newPerPage);
+    const currentUrl = new URL(window.location);
+    currentUrl.searchParams.set('per_page', newPerPage);
+    window.location.href = currentUrl.toString();
 }
 </script>
 {% endblock %}

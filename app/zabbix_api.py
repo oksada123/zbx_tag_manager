@@ -26,6 +26,7 @@ MAX_BULK_SIZE = 1000
 class ZabbixAPI:
     def __init__(self):
         self.url = os.getenv('ZABBIX_URL')
+        self.api_token = os.getenv('ZABBIX_API_TOKEN')
         self.username = os.getenv('ZABBIX_USER')
         self.password = os.getenv('ZABBIX_PASSWORD')
         self.auth_token = None
@@ -33,12 +34,24 @@ class ZabbixAPI:
 
         debug_print(f"Initializing ZabbixAPI:")
         debug_print(f"URL: {self.url}")
+        debug_print(f"API Token: {'*' * 8 + self.api_token[-8:] if self.api_token and len(self.api_token) > 8 else ('Set' if self.api_token else 'None')}")
         debug_print(f"Username: {self.username}")
         debug_print(f"Password: {'*' * len(self.password) if self.password else 'None'}")
         debug_print(f"Auth token at start: {self.auth_token}")
 
     def authenticate(self) -> bool:
         """Authentication in Zabbix API"""
+        # Priority 1: Use API token if available (no need to call user.login)
+        if self.api_token:
+            debug_print(f"Using API token for authentication (skipping user.login)")
+            self.auth_token = self.api_token
+            return True
+
+        # Priority 2: Fall back to username/password authentication
+        if not self.username or not self.password:
+            print("Authentication error: No API token or username/password configured")
+            return False
+
         # For Zabbix 7.x - try different formats
         payload = {
             "jsonrpc": "2.0",
@@ -117,10 +130,15 @@ class ZabbixAPI:
                 print(f"API error: {error_message}")
 
                 # If authentication error, clear token and try again (max 1 retry)
+                # But only retry if using username/password auth (not API token)
                 if retry_count < 1 and ('authentication' in error_message.lower() or 'session' in error_message.lower()):
-                    self.auth_token = None
-                    if method != "user.login":
-                        return self.make_request(method, params, retry_count + 1)
+                    if self.api_token:
+                        # API token is invalid or expired - cannot retry
+                        print("API token authentication failed. Please check if the token is valid and not expired.")
+                    else:
+                        self.auth_token = None
+                        if method != "user.login":
+                            return self.make_request(method, params, retry_count + 1)
 
                 return None
         except requests.RequestException as e:

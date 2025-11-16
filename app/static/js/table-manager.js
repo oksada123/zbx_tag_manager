@@ -567,6 +567,7 @@ class FilterManager {
     _init() {
         const searchInput = document.getElementById(this.searchInputId);
         const tagFilterInput = document.getElementById(this.tagFilterInputId);
+        const typeFilterEl = document.getElementById(this.typeFilterId);
 
         if (searchInput) {
             searchInput.addEventListener('input', () => this.filter());
@@ -574,13 +575,18 @@ class FilterManager {
         if (tagFilterInput) {
             tagFilterInput.addEventListener('input', () => this.filter());
         }
+        if (typeFilterEl) {
+            typeFilterEl.addEventListener('change', () => this.filter());
+        }
     }
 
     initializeOnLoad() {
         const searchTerm = document.getElementById(this.searchInputId).value.trim();
         const tagFilter = document.getElementById(this.tagFilterInputId).value.trim();
+        const typeFilterEl = document.getElementById(this.typeFilterId);
+        const typeFilter = typeFilterEl ? typeFilterEl.value : 'all';
 
-        if (searchTerm || tagFilter) {
+        if (searchTerm || tagFilter || typeFilter !== 'all') {
             this.filter();
         } else {
             const clearBtn = document.getElementById(this.clearButtonId);

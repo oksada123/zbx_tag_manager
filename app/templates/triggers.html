@@ -113,7 +113,7 @@
                         </thead>
                         <tbody id="triggersTable">
                             {% for trigger in triggers %}
-                            <tr data-trigger-name="{{ trigger.description|lower }}" data-trigger-tags="{% for tag in trigger.tags %}{{ tag.tag|lower }} {% endfor %}">
+                            <tr data-trigger-name="{{ trigger.description|lower }}" data-trigger-tags="{% for tag in trigger.tags %}{{ tag.tag|lower }}:{{ tag.value|lower if tag.value else '' }} {% endfor %}">
                                 <td>
                                     <input type="checkbox" class="trigger-checkbox" value="{{ trigger.triggerid }}">
                                 </td>

@@ -104,7 +104,7 @@
                         </thead>
                         <tbody id="hostsTable">
                             {% for host in hosts %}
-                            <tr data-host-name="{{ host.name|lower }}" data-host-tags="{% for tag in host.tags %}{{ tag.tag|lower }} {% endfor %}">
+                            <tr data-host-name="{{ host.name|lower }}" data-host-tags="{% for tag in host.tags %}{{ tag.tag|lower }}:{{ tag.value|lower if tag.value else '' }} {% endfor %}">
                                 <td>
                                     <input type="checkbox" class="host-checkbox" value="{{ host.hostid }}">
                                 </td>

@@ -131,7 +131,7 @@
                             {% for item in items %}
                             {% set host = item.host if item.host else (item.hosts[0] if item.hosts else None) %}
                             <tr data-item-name="{{ item.name|lower }}"
-                                data-item-tags="{% for tag in item.tags %}{{ tag.tag|lower }} {% endfor %}"
+                                data-item-tags="{% for tag in item.tags %}{{ tag.tag|lower }}:{{ tag.value|lower if tag.value else '' }} {% endfor %}"
                                 data-host-id="{{ host.hostid if host else '' }}">
                                 <td>
                                     <input type="checkbox" class="item-checkbox"

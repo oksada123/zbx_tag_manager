@@ -12,11 +12,18 @@
             </div>
             <div class="card-body">
                 <div class="row">
-                    <div class="col-md-5">
+                    <div class="col-md-4">
                         <input type="text" id="searchHosts" class="form-control" placeholder="Search by host name...">
                     </div>
-                    <div class="col-md-5">
+                    <div class="col-md-4">
                         <input type="text" id="filterByTag" class="form-control" placeholder="Filter by tag...">
+                    </div>
+                    <div class="col-md-2">
+                        <select id="filterByType" class="form-select" onchange="filterHosts()">
+                            <option value="all">All hosts</option>
+                            <option value="editable">Editable only</option>
+                            <option value="discovered">Discovered only</option>
+                        </select>
                     </div>
                     <div class="col-md-2">
                         <button id="clearFiltersBtn" class="btn btn-outline-secondary w-100" onclick="clearFilters()">
@@ -104,11 +111,20 @@
                         </thead>
                         <tbody id="hostsTable">
                             {% for host in hosts %}
-                            <tr data-host-name="{{ host.name|lower }}" data-host-tags="{% for tag in host.tags %}{{ tag.tag|lower }}:{{ tag.value|lower if tag.value else '' }} {% endfor %}">
+                            <tr data-host-name="{{ host.name|lower }}"
+                                data-host-tags="{% for tag in host.tags %}{{ tag.tag|lower }}:{{ tag.value|lower if tag.value else '' }} {% endfor %}"
+                                data-is-discovered="{{ 'true' if host.is_discovered else 'false' }}">
                                 <td>
                                     <input type="checkbox" class="host-checkbox" value="{{ host.hostid }}">
                                 </td>
-                                <td>{{ host.name }}</td>
+                                <td>
+                                    {{ host.name }}
+                                    {% if host.is_discovered %}
+                                    <span class="badge bg-warning text-dark ms-1" title="Discovered host (LLD) - inherited tags may be read-only">
+                                        <i class="fas fa-magic"></i> LLD
+                                    </span>
+                                    {% endif %}
+                                </td>
                                 <td>{{ host.host }}</td>
                                 <td>
                                     {% if host.status == "0" %}
@@ -232,6 +248,7 @@ function initializeFiltersOnLoad() {
 function filterHosts() {
     const searchTerm = document.getElementById('searchHosts').value.toLowerCase();
     const tagFilter = document.getElementById('filterByTag').value.toLowerCase();
+    const typeFilter = document.getElementById('filterByType').value;
     const rows = document.querySelectorAll('#hostsTable tr');
 
     let visibleCount = 0;
@@ -240,6 +257,7 @@ function filterHosts() {
     rows.forEach(row => {
         const hostName = row.getAttribute('data-host-name');
         const hostTags = row.getAttribute('data-host-tags');
+        const isDiscovered = row.getAttribute('data-is-discovered') === 'true';
 
         if (hostName && hostTags !== null) { // Check if this is a row with host data
             totalCount++;
@@ -247,7 +265,15 @@ function filterHosts() {
             const matchesSearch = !searchTerm || hostName.includes(searchTerm);
             const matchesTag = !tagFilter || (hostTags && hostTags.includes(tagFilter));
 
-            if (matchesSearch && matchesTag) {
+            // Check type filter
+            let matchesType = true;
+            if (typeFilter === 'editable') {
+                matchesType = !isDiscovered;
+            } else if (typeFilter === 'discovered') {
+                matchesType = isDiscovered;
+            }
+
+            if (matchesSearch && matchesTag && matchesType) {
                 row.style.display = '';
                 visibleCount++;
             } else {
@@ -262,7 +288,7 @@ function filterHosts() {
     });
 
     // Update filter status
-    updateFilterStatus(searchTerm, tagFilter, visibleCount, totalCount);
+    updateFilterStatus(searchTerm, tagFilter, visibleCount, totalCount, typeFilter);
 
     // Update main checkbox state after filtering
     updateSelectAllCheckbox();
@@ -273,14 +299,20 @@ function filterHosts() {
     }
 }
 
-function updateFilterStatus(searchTerm, tagFilter, visibleCount, totalCount) {
+function updateFilterStatus(searchTerm, tagFilter, visibleCount, totalCount, typeFilter = 'all') {
     const statusElement = document.getElementById('filterStatus');
     const clearBtn = document.getElementById('clearFiltersBtn');
 
-    const hasFilters = searchTerm || tagFilter;
+    const hasFilters = searchTerm || tagFilter || typeFilter !== 'all';
 
     if (hasFilters) {
-        statusElement.textContent = `Showing ${visibleCount} of ${totalCount} hosts`;
+        let statusParts = [];
+        if (searchTerm) statusParts.push(`name: "${searchTerm}"`);
+        if (tagFilter) statusParts.push(`tag: "${tagFilter}"`);
+        if (typeFilter === 'editable') statusParts.push('editable only');
+        if (typeFilter === 'discovered') statusParts.push('discovered only');
+
+        statusElement.textContent = `Showing ${visibleCount} of ${totalCount} hosts (filtered by ${statusParts.join(', ')})`;
         clearBtn.style.display = '';
     } else {
         statusElement.textContent = '';
@@ -293,6 +325,7 @@ function clearFilters() {
     // Clear search fields
     document.getElementById('searchHosts').value = '';
     document.getElementById('filterByTag').value = '';
+    document.getElementById('filterByType').value = 'all';
 
     // Show all rows
     const rows = document.querySelectorAll('#hostsTable tr');
@@ -307,7 +340,7 @@ function clearFilters() {
     });
 
     // Update filter status
-    updateFilterStatus('', '', totalCount, totalCount);
+    updateFilterStatus('', '', totalCount, totalCount, 'all');
 
     // Update main checkbox state
     updateSelectAllCheckbox();
@@ -391,11 +424,16 @@ function toggleAll() {
 // Update bulk status
 function updateBulkStatus() {
     const selectedCheckboxes = [];
+    let discoveredCount = 0;
+
     document.querySelectorAll('#hostsTable tr').forEach(row => {
         if (row.style.display !== 'none') {
             const checkbox = row.querySelector('.host-checkbox');
             if (checkbox && checkbox.checked) {
                 selectedCheckboxes.push(checkbox);
+                if (row.getAttribute('data-is-discovered') === 'true') {
+                    discoveredCount++;
+                }
             }
         }
     });
@@ -410,10 +448,12 @@ function updateBulkStatus() {
     if (count > 0 || hasInput) {
         if (count === 0) {
             statusElement.textContent = 'No hosts selected';
-        } else if (count === 1) {
-            statusElement.textContent = '1 host selected';
         } else {
-            statusElement.textContent = `${count} hosts selected`;
+            let statusText = count === 1 ? '1 host selected' : `${count} hosts selected`;
+            if (discoveredCount > 0) {
+                statusText += ` - ${discoveredCount} discovered (may fail)`;
+            }
+            statusElement.textContent = statusText;
         }
     } else {
         statusElement.textContent = '';
@@ -539,13 +579,18 @@ async function bulkOperation(operation, hostIds, tagName, tagValue) {
         const batchSize = 10;
         let processed = 0;
         let successful = 0;
+        let failed = 0;
 
         for (let i = 0; i < hostIds.length; i += batchSize) {
             // Check if operation was canceled
             if (cancelOperation) {
                 progressModal.hide();
                 setTimeout(() => {
-                    alert(`Operation canceled. ${operation === 'add' ? 'Added' : 'Removed'} tag ${operation === 'add' ? 'to' : 'from'} ${successful} of ${hostIds.length} hosts.`);
+                    let message = `Operation canceled. ${operation === 'add' ? 'Added' : 'Removed'} tag ${operation === 'add' ? 'to' : 'from'} ${successful} of ${hostIds.length} hosts.`;
+                    if (failed > 0) {
+                        message += `\n${failed} hosts failed (likely discovered/read-only).`;
+                    }
+                    alert(message);
                     location.reload();
                 }, 500);
                 return;
@@ -570,7 +615,11 @@ async function bulkOperation(operation, hostIds, tagName, tagValue) {
                 });
 
                 const data = await response.json();
-                if (data.success) {
+                if (data.success && data.details) {
+                    successful += data.details.success_count || 0;
+                    failed += data.details.failed_count || 0;
+                } else if (data.success) {
+                    // Fallback for old format
                     successful += batch.length;
                 }
                 processed += batch.length;
@@ -584,6 +633,7 @@ async function bulkOperation(operation, hostIds, tagName, tagValue) {
             } catch (error) {
                 console.error('Error in batch:', error);
                 processed += batch.length;
+                failed += batch.length;
             }
 
             // Short pause to not overload server
@@ -594,7 +644,11 @@ async function bulkOperation(operation, hostIds, tagName, tagValue) {
         progressModal.hide();
 
         setTimeout(() => {
-            alert(`Operation completed. ${operation === 'add' ? 'Added' : 'Removed'} tag ${operation === 'add' ? 'to' : 'from'} ${successful} hosts.`);
+            let message = `Operation completed. ${operation === 'add' ? 'Added' : 'Removed'} tag ${operation === 'add' ? 'to' : 'from'} ${successful} hosts.`;
+            if (failed > 0) {
+                message += `\n\n${failed} hosts failed (likely discovered/read-only).`;
+            }
+            alert(message);
             location.reload();
         }, 500);
 

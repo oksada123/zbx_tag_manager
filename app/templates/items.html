@@ -12,11 +12,18 @@
             </div>
             <div class="card-body">
                 <div class="row">
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <input type="text" id="searchItems" class="form-control" placeholder="Search by item name...">
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <input type="text" id="filterByTag" class="form-control" placeholder="Filter by tag...">
+                    </div>
+                    <div class="col-md-2">
+                        <select id="filterByType" class="form-select" onchange="filterItems()">
+                            <option value="all">All items</option>
+                            <option value="editable">Editable only</option>
+                            <option value="discovered">Discovered only</option>
+                        </select>
                     </div>
                     <div class="col-md-5">
                         <div class="input-group">
@@ -120,7 +127,9 @@
                                 <th><input type="checkbox" id="selectAllCheckbox" onchange="toggleAll()"></th>
                                 <th>Item Name</th>
                                 <th>Key</th>
-                                <th>Host</th>
+                                <th class="sortable" onclick="sortByHostCount()" style="cursor: pointer;">
+                                    Hosts <i id="hostSortIcon" class="fas fa-sort ms-1"></i>
+                                </th>
                                 <th>Type</th>
                                 <th>Status</th>
                                 <th>Tags</th>
@@ -129,19 +138,39 @@
                         </thead>
                         <tbody id="itemsTable">
                             {% for item in items %}
-                            {% set host = item.host if item.host else (item.hosts[0] if item.hosts else None) %}
                             <tr data-item-name="{{ item.name|lower }}"
                                 data-item-tags="{% for tag in item.tags %}{{ tag.tag|lower }}:{{ tag.value|lower if tag.value else '' }} {% endfor %}"
-                                data-host-id="{{ host.hostid if host else '' }}">
+                                data-host-ids="{% for host in item.hosts %}{{ host.hostid }} {% endfor %}"
+                                data-host-count="{{ item.host_count }}"
+                                data-itemid-host-map='{{ item.itemid_host_map|tojson }}'
+                                data-itemid-tags-map='{{ item.itemid_tags_map|tojson }}'
+                                data-itemid-flags-map='{{ item.itemid_flags_map|tojson }}'
+                                data-has-discovered="{{ 'true' if item.has_discovered else 'false' }}">
                                 <td>
                                     <input type="checkbox" class="item-checkbox"
-                                           value="{{ item.itemid }}:{{ host.hostid if host else '0' }}">
+                                           value="{{ item.itemids|join(',') }}">
                                 </td>
-                                <td>{{ item.name }}</td>
+                                <td>
+                                    {{ item.name }}
+                                    {% if item.has_discovered %}
+                                    <span class="badge bg-warning text-dark ms-1" title="Contains discovered items (LLD) - tags may be read-only">
+                                        <i class="fas fa-magic"></i> LLD
+                                    </span>
+                                    {% endif %}
+                                </td>
                                 <td><code class="small">{{ item.key_ }}</code></td>
                                 <td>
-                                    {% if host %}
-                                        <small class="text-muted">{{ host.name }}</small>
+                                    {% if item.hosts|length > 0 %}
+                                        <div class="dropdown">
+                                            <button class="btn btn-sm btn-outline-secondary dropdown-toggle host-count-btn" type="button" data-bs-toggle="dropdown" aria-expanded="false" data-total-hosts="{{ item.hosts|length }}">
+                                                {{ item.hosts|length }} host{{ 's' if item.hosts|length > 1 else '' }}
+                                            </button>
+                                            <ul class="dropdown-menu dropdown-menu-hosts">
+                                                {% for host in item.hosts|sort(attribute='name') %}
+                                                <li data-host-id="{{ host.hostid }}"><a class="dropdown-item" href="#" onclick="filterBySpecificHost('{{ host.hostid }}'); return false;">{{ host.name }}</a></li>
+                                                {% endfor %}
+                                            </ul>
+                                        </div>
                                     {% else %}
                                         <span class="text-muted">No host</span>
                                     {% endif %}
@@ -233,6 +262,19 @@
         </div>
     </div>
 </div>
+
+<style>
+/* Dropdown menu for hosts - scrollable with max height */
+.dropdown-menu-hosts {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+/* Sortable column header hover effect */
+th.sortable:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+</style>
 
 <script>
 // Global flag for canceling bulk operations
@@ -333,6 +375,7 @@ function getSelectedHosts() {
 function filterItems() {
     const searchTerm = document.getElementById('searchItems').value.toLowerCase();
     const tagFilter = document.getElementById('filterByTag').value.toLowerCase();
+    const typeFilter = document.getElementById('filterByType').value;
     const selectedHosts = getSelectedHosts();
     const rows = document.querySelectorAll('#itemsTable tr');
 
@@ -342,18 +385,54 @@ function filterItems() {
     rows.forEach(row => {
         const itemName = row.getAttribute('data-item-name');
         const itemTags = row.getAttribute('data-item-tags');
-        const hostId = row.getAttribute('data-host-id');
+        const hostIds = row.getAttribute('data-host-ids');
+        const hasDiscovered = row.getAttribute('data-has-discovered') === 'true';
 
         if (itemName && itemTags !== null) {
             totalCount++;
 
             const matchesSearch = !searchTerm || itemName.includes(searchTerm);
-            const matchesTag = !tagFilter || (itemTags && itemTags.includes(tagFilter));
-            const matchesHost = selectedHosts.length === 0 || selectedHosts.includes(hostId);
 
-            if (matchesSearch && matchesTag && matchesHost) {
+            // Check type filter (editable/discovered)
+            let matchesType = true;
+            if (typeFilter === 'editable') {
+                matchesType = !hasDiscovered;
+            } else if (typeFilter === 'discovered') {
+                matchesType = hasDiscovered;
+            }
+
+            // Get itemid->tags and itemid->host maps
+            const itemidTagsMap = JSON.parse(row.getAttribute('data-itemid-tags-map') || '{}');
+            const itemidHostMap = JSON.parse(row.getAttribute('data-itemid-host-map') || '{}');
+
+            // Find which hosts have matching tags
+            let matchingHostIds = [];
+            if (tagFilter) {
+                for (const [itemid, tagsStr] of Object.entries(itemidTagsMap)) {
+                    if (tagsStr.includes(tagFilter)) {
+                        const hostId = itemidHostMap[itemid];
+                        if (hostId && !matchingHostIds.includes(hostId)) {
+                            matchingHostIds.push(hostId);
+                        }
+                    }
+                }
+            }
+
+            const matchesTag = !tagFilter || matchingHostIds.length > 0;
+
+            // Check if any of the item's hosts match the selected hosts
+            let matchesHost = selectedHosts.length === 0;
+            if (!matchesHost && hostIds) {
+                const itemHostIds = hostIds.trim().split(/\s+/);
+                matchesHost = selectedHosts.some(selectedHost => itemHostIds.includes(selectedHost));
+            }
+
+            if (matchesSearch && matchesTag && matchesHost && matchesType) {
                 row.style.display = '';
                 visibleCount++;
+
+                // Update dropdown to show only matching hosts when tag filter is active
+                updateHostDropdown(row, tagFilter, matchingHostIds);
             } else {
                 row.style.display = 'none';
                 const checkbox = row.querySelector('.item-checkbox');
@@ -364,7 +443,7 @@ function filterItems() {
         }
     });
 
-    updateFilterStatus(searchTerm, tagFilter, selectedHosts.length, visibleCount, totalCount);
+    updateFilterStatus(searchTerm, tagFilter, selectedHosts.length, visibleCount, totalCount, typeFilter);
     updateSelectAllCheckbox();
 
     // Re-paginate after filtering (if pagination is initialized)
@@ -373,19 +452,68 @@ function filterItems() {
     }
 }
 
-function updateFilterStatus(searchTerm, tagFilter, hostCount, visibleCount, totalCount) {
+// Update host dropdown to show only hosts matching the active filters
+function updateHostDropdown(row, tagFilter, matchingHostIdsByTag) {
+    const dropdown = row.querySelector('.dropdown');
+    if (!dropdown) return;
+
+    const button = dropdown.querySelector('.host-count-btn');
+    const items = dropdown.querySelectorAll('.dropdown-menu li');
+    const totalHosts = parseInt(button.getAttribute('data-total-hosts') || '0');
+    const selectedHosts = getSelectedHosts();
+
+    // Determine which hosts should be visible based on all active filters
+    let visibleHostCount = 0;
+
+    items.forEach(item => {
+        const hostId = item.getAttribute('data-host-id');
+        let shouldShow = true;
+
+        // Check tag filter
+        if (tagFilter && !matchingHostIdsByTag.includes(hostId)) {
+            shouldShow = false;
+        }
+
+        // Check host filter
+        if (selectedHosts.length > 0 && !selectedHosts.includes(hostId)) {
+            shouldShow = false;
+        }
+
+        if (shouldShow) {
+            item.style.display = '';
+            visibleHostCount++;
+        } else {
+            item.style.display = 'none';
+        }
+    });
+
+    // Update button text
+    if (!tagFilter && selectedHosts.length === 0) {
+        // No filters - show total
+        const hostText = totalHosts === 1 ? '1 host' : `${totalHosts} hosts`;
+        button.textContent = hostText;
+    } else {
+        // Filters active - show filtered count
+        const hostText = visibleHostCount === 1 ? '1 host' : `${visibleHostCount} hosts`;
+        button.textContent = hostText;
+    }
+}
+
+function updateFilterStatus(searchTerm, tagFilter, hostCount, visibleCount, totalCount, typeFilter = 'all') {
     const statusElement = document.getElementById('filterStatus');
     const clearBtn = document.getElementById('clearFiltersBtn');
     const paginationContainerTop = document.getElementById('paginationContainerTop');
     const paginationContainerBottom = document.getElementById('paginationContainerBottom');
 
-    const hasFilters = searchTerm || tagFilter || hostCount > 0;
+    const hasFilters = searchTerm || tagFilter || hostCount > 0 || typeFilter !== 'all';
 
     if (hasFilters) {
         let statusParts = [];
         if (searchTerm) statusParts.push(`name: "${searchTerm}"`);
         if (tagFilter) statusParts.push(`tag: "${tagFilter}"`);
         if (hostCount > 0) statusParts.push(`${hostCount} host${hostCount > 1 ? 's' : ''}`);
+        if (typeFilter === 'editable') statusParts.push('editable only');
+        if (typeFilter === 'discovered') statusParts.push('discovered only');
 
         statusElement.textContent = `Showing ${visibleCount} of ${totalCount} items (filtered by ${statusParts.join(', ')})`;
         clearBtn.style.display = '';
@@ -404,6 +532,7 @@ function updateFilterStatus(searchTerm, tagFilter, hostCount, visibleCount, tota
 function clearFilters() {
     document.getElementById('searchItems').value = '';
     document.getElementById('filterByTag').value = '';
+    document.getElementById('filterByType').value = 'all';
 
     // Clear Select2
     $('#filterByHost').val(null).trigger('change');
@@ -415,11 +544,13 @@ function clearFilters() {
         const itemName = row.getAttribute('data-item-name');
         if (itemName) {
             totalCount++;
+            // Reset host dropdown to show all hosts
+            updateHostDropdown(row, '', []);
         }
         row.style.display = '';
     });
 
-    updateFilterStatus('', '', 0, totalCount, totalCount);
+    updateFilterStatus('', '', 0, totalCount, totalCount, 'all');
     updateSelectAllCheckbox();
 
     // Re-paginate after clearing filters
@@ -593,19 +724,34 @@ function updateBulkStatus() {
     });
 
     const statusElement = document.getElementById('bulkStatus');
-    const count = selectedCheckboxes.length;
+    const rowCount = selectedCheckboxes.length;
+
+    // Get actual number of item instances that will be affected
+    const selectedItemsInfo = getSelectedItemsWithInfo();
+    const instanceCount = selectedItemsInfo.total;
+    const discoveredCount = selectedItemsInfo.discovered;
 
     const tagName = document.getElementById('bulkTagName').value.trim();
     const tagValue = document.getElementById('bulkTagValue').value.trim();
     const hasInput = tagName || tagValue;
 
-    if (count > 0 || hasInput) {
-        if (count === 0) {
+    if (rowCount > 0 || hasInput) {
+        if (rowCount === 0) {
             statusElement.textContent = 'No items selected';
-        } else if (count === 1) {
-            statusElement.textContent = '1 item selected';
         } else {
-            statusElement.textContent = `${count} items selected`;
+            let statusText = '';
+            if (instanceCount === rowCount) {
+                statusText = instanceCount === 1 ? '1 item instance selected' : `${instanceCount} item instances selected`;
+            } else {
+                statusText = `${rowCount} item groups selected (${instanceCount} item instances)`;
+            }
+
+            // Add warning about discovered items
+            if (discoveredCount > 0) {
+                statusText += ` - ${discoveredCount} discovered (may fail)`;
+            }
+
+            statusElement.textContent = statusText;
         }
     } else {
         statusElement.textContent = '';
@@ -676,7 +822,22 @@ function bulkAddTags() {
         return;
     }
 
-    if (confirm(`Are you sure you want to add tag "${tagName}" to ${selectedItems.length} items?`)) {
+    const selectedHosts = getSelectedHosts();
+    const tagFilterValue = document.getElementById('filterByTag').value.trim();
+
+    let confirmMessage = `Are you sure you want to add tag "${tagName}" to ${selectedItems.length} item instances?`;
+    let filterInfo = [];
+    if (selectedHosts.length > 0) {
+        filterInfo.push(`${selectedHosts.length} host${selectedHosts.length > 1 ? 's' : ''}`);
+    }
+    if (tagFilterValue) {
+        filterInfo.push(`tag: "${tagFilterValue}"`);
+    }
+    if (filterInfo.length > 0) {
+        confirmMessage += `\n\n(Filtered by ${filterInfo.join(', ')})`;
+    }
+
+    if (confirm(confirmMessage)) {
         bulkOperation('add', selectedItems, tagName, tagValue);
     }
 }
@@ -695,13 +856,66 @@ function bulkRemoveTags() {
         return;
     }
 
-    if (confirm(`Are you sure you want to remove tag "${tagName}" from ${selectedItems.length} items?`)) {
+    const selectedHosts = getSelectedHosts();
+    const tagFilterValue = document.getElementById('filterByTag').value.trim();
+
+    let confirmMessage = `Are you sure you want to remove tag "${tagName}" from ${selectedItems.length} item instances?`;
+    let filterInfo = [];
+    if (selectedHosts.length > 0) {
+        filterInfo.push(`${selectedHosts.length} host${selectedHosts.length > 1 ? 's' : ''}`);
+    }
+    if (tagFilterValue) {
+        filterInfo.push(`tag: "${tagFilterValue}"`);
+    }
+    if (filterInfo.length > 0) {
+        confirmMessage += `\n\n(Filtered by ${filterInfo.join(', ')})`;
+    }
+
+    if (confirm(confirmMessage)) {
         bulkOperation('remove', selectedItems, tagName, '');
     }
 }
 
 function getSelectedItems() {
-    return Array.from(document.querySelectorAll('.item-checkbox:checked')).map(cb => cb.value);
+    return getSelectedItemsWithInfo().items;
+}
+
+function getSelectedItemsWithInfo() {
+    const selectedHosts = getSelectedHosts();
+    const tagFilter = document.getElementById('filterByTag').value.toLowerCase();
+    const selectedItems = [];
+    let discoveredCount = 0;
+
+    document.querySelectorAll('.item-checkbox:checked').forEach(cb => {
+        const row = cb.closest('tr');
+        const allItemIds = cb.value.split(',');
+        const itemidHostMap = JSON.parse(row.getAttribute('data-itemid-host-map') || '{}');
+        const itemidTagsMap = JSON.parse(row.getAttribute('data-itemid-tags-map') || '{}');
+        const itemidFlagsMap = JSON.parse(row.getAttribute('data-itemid-flags-map') || '{}');
+
+        allItemIds.forEach(itemid => {
+            const hostId = itemidHostMap[itemid];
+            const tagsStr = itemidTagsMap[itemid] || '';
+            const flags = itemidFlagsMap[itemid] || '0';
+
+            // Check if itemid matches all active filters
+            const matchesHostFilter = selectedHosts.length === 0 || (hostId && selectedHosts.includes(hostId));
+            const matchesTagFilter = !tagFilter || tagsStr.includes(tagFilter);
+
+            if (matchesHostFilter && matchesTagFilter) {
+                selectedItems.push(itemid);
+                if (flags === '4') {
+                    discoveredCount++;
+                }
+            }
+        });
+    });
+
+    return {
+        items: selectedItems,
+        total: selectedItems.length,
+        discovered: discoveredCount
+    };
 }
 
 async function bulkOperation(operation, itemIds, tagName, tagValue) {
@@ -729,13 +943,18 @@ async function bulkOperation(operation, itemIds, tagName, tagValue) {
         const batchSize = 10;
         let processed = 0;
         let successful = 0;
+        let failed = 0;
 
         for (let i = 0; i < itemIds.length; i += batchSize) {
             // Check if operation was canceled
             if (cancelOperation) {
                 progressModal.hide();
                 setTimeout(() => {
-                    alert(`Operation canceled. ${operation === 'add' ? 'Added' : 'Removed'} tag ${operation === 'add' ? 'to' : 'from'} ${successful} of ${itemIds.length} items.`);
+                    let message = `Operation canceled. ${operation === 'add' ? 'Added' : 'Removed'} tag ${operation === 'add' ? 'to' : 'from'} ${successful} of ${itemIds.length} items.`;
+                    if (failed > 0) {
+                        message += `\n${failed} items failed (likely discovered/read-only).`;
+                    }
+                    alert(message);
                     location.reload();
                 }, 500);
                 return;
@@ -760,7 +979,11 @@ async function bulkOperation(operation, itemIds, tagName, tagValue) {
                 });
 
                 const data = await response.json();
-                if (data.success) {
+                if (data.success && data.details) {
+                    successful += data.details.success_count || 0;
+                    failed += data.details.failed_count || 0;
+                } else if (data.success) {
+                    // Fallback for old format
                     const matches = data.message.match(/(\d+)/);
                     const batchSuccessful = matches ? parseInt(matches[1]) : 0;
                     successful += batchSuccessful;
@@ -776,6 +999,7 @@ async function bulkOperation(operation, itemIds, tagName, tagValue) {
             } catch (error) {
                 console.error('Error in batch:', error);
                 processed += batch.length;
+                failed += batch.length;
             }
 
             await new Promise(resolve => setTimeout(resolve, 100));
@@ -784,7 +1008,11 @@ async function bulkOperation(operation, itemIds, tagName, tagValue) {
         progressModal.hide();
 
         setTimeout(() => {
-            alert(`Operation completed. ${operation === 'add' ? 'Added' : 'Removed'} tag ${operation === 'add' ? 'to' : 'from'} ${successful} items.`);
+            let message = `Operation completed. ${operation === 'add' ? 'Added' : 'Removed'} tag ${operation === 'add' ? 'to' : 'from'} ${successful} items.`;
+            if (failed > 0) {
+                message += `\n\n${failed} items failed (likely discovered/read-only).`;
+            }
+            alert(message);
             location.reload();
         }, 500);
 
@@ -942,6 +1170,77 @@ function changePerPage(newPerPage) {
     const currentUrl = new URL(window.location);
     currentUrl.searchParams.set('per_page', newPerPage);
     window.location.href = currentUrl.toString();
+}
+
+// ========================================
+// HOST COUNT SORTING
+// ========================================
+
+let hostSortDirection = 'none'; // 'none', 'asc', 'desc'
+
+function sortByHostCount() {
+    const tbody = document.getElementById('itemsTable');
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+
+    // Cycle through sort directions: none -> desc -> asc -> none
+    if (hostSortDirection === 'none') {
+        hostSortDirection = 'desc';
+    } else if (hostSortDirection === 'desc') {
+        hostSortDirection = 'asc';
+    } else {
+        hostSortDirection = 'none';
+    }
+
+    // Update sort icon
+    const sortIcon = document.getElementById('hostSortIcon');
+    if (hostSortDirection === 'desc') {
+        sortIcon.className = 'fas fa-sort-down ms-1';
+    } else if (hostSortDirection === 'asc') {
+        sortIcon.className = 'fas fa-sort-up ms-1';
+    } else {
+        sortIcon.className = 'fas fa-sort ms-1';
+    }
+
+    if (hostSortDirection === 'none') {
+        // Reset to original order - reload page
+        location.reload();
+        return;
+    }
+
+    // Sort rows by host count
+    rows.sort((a, b) => {
+        const countA = parseInt(a.getAttribute('data-host-count') || '0');
+        const countB = parseInt(b.getAttribute('data-host-count') || '0');
+
+        if (hostSortDirection === 'desc') {
+            return countB - countA;
+        } else {
+            return countA - countB;
+        }
+    });
+
+    // Re-append sorted rows
+    rows.forEach(row => tbody.appendChild(row));
+
+    // Update allRows for pagination
+    allRows = Array.from(tbody.querySelectorAll('tr'));
+
+    // Re-paginate
+    if (allRows.length > 0) {
+        showPage(1);
+    }
+}
+
+// Filter by specific host (from dropdown click)
+function filterBySpecificHost(hostId) {
+    // Set the host filter in Select2
+    const currentSelection = $('#filterByHost').val() || [];
+
+    // Add this host to selection if not already selected
+    if (!currentSelection.includes(hostId)) {
+        currentSelection.push(hostId);
+        $('#filterByHost').val(currentSelection).trigger('change');
+    }
 }
 </script>
 {% endblock %}

@@ -130,7 +130,7 @@ class ZabbixAPI:
     def get_hosts(self, limit: int = None, offset: int = None) -> List[Dict[str, Any]]:
         """Fetch list of hosts with tags with optional pagination"""
         params = {
-            "output": ["hostid", "host", "name", "status"],
+            "output": ["hostid", "host", "name", "status", "flags"],
             "selectTags": "extend",
             "sortfield": "name",
             "sortorder": "ASC"  # Required for stable pagination
@@ -281,6 +281,32 @@ class ZabbixAPI:
 
         return success_count
 
+    def bulk_add_tags_detailed(self, host_ids: List[int], tag_name: str, tag_value: str = "") -> dict:
+        """Bulk add tags to hosts with detailed error reporting"""
+        if not host_ids or len(host_ids) == 0:
+            return {'success': 0, 'failed': 0, 'errors': []}
+
+        if len(host_ids) > MAX_BULK_SIZE:
+            debug_print(f" Bulk operation limited to {MAX_BULK_SIZE} hosts (requested: {len(host_ids)})")
+            host_ids = host_ids[:MAX_BULK_SIZE]
+
+        success_count = 0
+        failed_count = 0
+        errors = []
+
+        for host_id in host_ids:
+            if self.add_tag_to_host(host_id, tag_name, tag_value):
+                success_count += 1
+            else:
+                failed_count += 1
+                errors.append(host_id)
+
+        return {
+            'success': success_count,
+            'failed': failed_count,
+            'errors': errors
+        }
+
     def bulk_remove_tags(self, host_ids: List[int], tag_name: str) -> int:
         """Bulk remove tags from hosts"""
         if not host_ids or len(host_ids) == 0:
@@ -297,6 +323,32 @@ class ZabbixAPI:
                 success_count += 1
 
         return success_count
+
+    def bulk_remove_tags_detailed(self, host_ids: List[int], tag_name: str) -> dict:
+        """Bulk remove tags from hosts with detailed error reporting"""
+        if not host_ids or len(host_ids) == 0:
+            return {'success': 0, 'failed': 0, 'errors': []}
+
+        if len(host_ids) > MAX_BULK_SIZE:
+            debug_print(f" Bulk operation limited to {MAX_BULK_SIZE} hosts (requested: {len(host_ids)})")
+            host_ids = host_ids[:MAX_BULK_SIZE]
+
+        success_count = 0
+        failed_count = 0
+        errors = []
+
+        for host_id in host_ids:
+            if self.remove_tag_from_host(host_id, tag_name):
+                success_count += 1
+            else:
+                failed_count += 1
+                errors.append(host_id)
+
+        return {
+            'success': success_count,
+            'failed': failed_count,
+            'errors': errors
+        }
 
     def get_all_tags(self) -> List[str]:
         """Fetch all used tags in the system"""
@@ -330,7 +382,7 @@ class ZabbixAPI:
     def get_triggers(self, limit: int = None, offset: int = None) -> List[Dict[str, Any]]:
         """Fetch list of triggers with tags with optional pagination"""
         params = {
-            "output": ["triggerid", "description", "status", "priority", "url", "expression"],
+            "output": ["triggerid", "description", "status", "priority", "url", "expression", "flags"],
             "selectTags": "extend",
             "selectHosts": ["hostid", "name"],
             "sortfield": "description",
@@ -485,6 +537,32 @@ class ZabbixAPI:
 
         return success_count
 
+    def bulk_add_tags_to_triggers_detailed(self, trigger_ids: List[int], tag_name: str, tag_value: str = "") -> dict:
+        """Bulk add tags to triggers with detailed error reporting"""
+        if not trigger_ids or len(trigger_ids) == 0:
+            return {'success': 0, 'failed': 0, 'errors': []}
+
+        if len(trigger_ids) > MAX_BULK_SIZE:
+            debug_print(f" Bulk operation limited to {MAX_BULK_SIZE} triggers (requested: {len(trigger_ids)})")
+            trigger_ids = trigger_ids[:MAX_BULK_SIZE]
+
+        success_count = 0
+        failed_count = 0
+        errors = []
+
+        for trigger_id in trigger_ids:
+            if self.add_tag_to_trigger(trigger_id, tag_name, tag_value):
+                success_count += 1
+            else:
+                failed_count += 1
+                errors.append(trigger_id)
+
+        return {
+            'success': success_count,
+            'failed': failed_count,
+            'errors': errors
+        }
+
     def bulk_remove_tags_from_triggers(self, trigger_ids: List[int], tag_name: str) -> int:
         """Bulk remove tags from triggers"""
         if not trigger_ids or len(trigger_ids) == 0:
@@ -501,6 +579,32 @@ class ZabbixAPI:
                 success_count += 1
 
         return success_count
+
+    def bulk_remove_tags_from_triggers_detailed(self, trigger_ids: List[int], tag_name: str) -> dict:
+        """Bulk remove tags from triggers with detailed error reporting"""
+        if not trigger_ids or len(trigger_ids) == 0:
+            return {'success': 0, 'failed': 0, 'errors': []}
+
+        if len(trigger_ids) > MAX_BULK_SIZE:
+            debug_print(f" Bulk operation limited to {MAX_BULK_SIZE} triggers (requested: {len(trigger_ids)})")
+            trigger_ids = trigger_ids[:MAX_BULK_SIZE]
+
+        success_count = 0
+        failed_count = 0
+        errors = []
+
+        for trigger_id in trigger_ids:
+            if self.remove_tag_from_trigger(trigger_id, tag_name):
+                success_count += 1
+            else:
+                failed_count += 1
+                errors.append(trigger_id)
+
+        return {
+            'success': success_count,
+            'failed': failed_count,
+            'errors': errors
+        }
 
     def search_triggers_by_tag(self, tag_name: str, tag_value: str = None) -> List[Dict[str, Any]]:
         """Search triggers by tag"""
@@ -525,7 +629,7 @@ class ZabbixAPI:
     def get_items(self, limit: int = None, offset: int = None) -> List[Dict[str, Any]]:
         """Fetch list of items with tags with optional pagination"""
         params = {
-            "output": ["itemid", "name", "key_", "type", "status", "value_type", "delay"],
+            "output": ["itemid", "name", "key_", "type", "status", "value_type", "delay", "flags"],
             "selectTags": "extend",
             "selectHosts": ["hostid", "name"],
             "sortfield": "name",
@@ -680,6 +784,32 @@ class ZabbixAPI:
 
         return success_count
 
+    def bulk_add_tags_to_items_detailed(self, item_ids: List[int], tag_name: str, tag_value: str = "") -> dict:
+        """Bulk add tags to items with detailed error reporting"""
+        if not item_ids or len(item_ids) == 0:
+            return {'success': 0, 'failed': 0, 'errors': []}
+
+        if len(item_ids) > MAX_BULK_SIZE:
+            debug_print(f" Bulk operation limited to {MAX_BULK_SIZE} items (requested: {len(item_ids)})")
+            item_ids = item_ids[:MAX_BULK_SIZE]
+
+        success_count = 0
+        failed_count = 0
+        errors = []
+
+        for item_id in item_ids:
+            if self.add_tag_to_item(item_id, tag_name, tag_value):
+                success_count += 1
+            else:
+                failed_count += 1
+                errors.append(item_id)
+
+        return {
+            'success': success_count,
+            'failed': failed_count,
+            'errors': errors
+        }
+
     def bulk_remove_tags_from_items(self, item_ids: List[int], tag_name: str) -> int:
         """Bulk remove tags from items"""
         if not item_ids or len(item_ids) == 0:
@@ -696,6 +826,32 @@ class ZabbixAPI:
                 success_count += 1
 
         return success_count
+
+    def bulk_remove_tags_from_items_detailed(self, item_ids: List[int], tag_name: str) -> dict:
+        """Bulk remove tags from items with detailed error reporting"""
+        if not item_ids or len(item_ids) == 0:
+            return {'success': 0, 'failed': 0, 'errors': []}
+
+        if len(item_ids) > MAX_BULK_SIZE:
+            debug_print(f" Bulk operation limited to {MAX_BULK_SIZE} items (requested: {len(item_ids)})")
+            item_ids = item_ids[:MAX_BULK_SIZE]
+
+        success_count = 0
+        failed_count = 0
+        errors = []
+
+        for item_id in item_ids:
+            if self.remove_tag_from_item(item_id, tag_name):
+                success_count += 1
+            else:
+                failed_count += 1
+                errors.append(item_id)
+
+        return {
+            'success': success_count,
+            'failed': failed_count,
+            'errors': errors
+        }
 
     def search_items_by_tag(self, tag_name: str, tag_value: str = None) -> List[Dict[str, Any]]:
         """Search items by tag"""

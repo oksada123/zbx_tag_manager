@@ -543,11 +543,13 @@ document.addEventListener('DOMContentLoaded', function() {
     // Add search and filter listeners
     document.getElementById('searchItems').addEventListener('input', filterItems);
     document.getElementById('filterByTag').addEventListener('input', filterItems);
+    document.getElementById('filterByType').addEventListener('change', filterItems);
 
     // Initialize filters on load
     const searchTerm = document.getElementById('searchItems').value.trim();
     const tagFilter = document.getElementById('filterByTag').value.trim();
-    if (searchTerm || tagFilter || getSelectedHostsFromSelect2().length > 0) {
+    const typeFilter = document.getElementById('filterByType').value;
+    if (searchTerm || tagFilter || typeFilter !== 'all' || getSelectedHostsFromSelect2().length > 0) {
         filterItems();
     } else {
         document.getElementById('clearFiltersBtn').style.display = 'none';

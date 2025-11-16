@@ -110,11 +110,21 @@
                         <thead class="table-dark">
                             <tr>
                                 <th><input type="checkbox" id="selectAllCheckbox" onchange="toggleAll()"></th>
-                                <th>Trigger Description</th>
-                                <th>Host</th>
-                                <th>Priority</th>
-                                <th>Status</th>
-                                <th>Tags</th>
+                                <th class="sortable" onclick="sortManager.sortBy('description', 'data-sort-description', 'string')" style="cursor: pointer;">
+                                    Trigger Description <i id="descriptionSortIcon" class="fas fa-sort ms-1"></i>
+                                </th>
+                                <th class="sortable" onclick="sortManager.sortBy('host', 'data-sort-host', 'string')" style="cursor: pointer;">
+                                    Host <i id="hostSortIcon" class="fas fa-sort ms-1"></i>
+                                </th>
+                                <th class="sortable" onclick="sortManager.sortBy('priority', 'data-sort-priority', 'number')" style="cursor: pointer;">
+                                    Priority <i id="prioritySortIcon" class="fas fa-sort ms-1"></i>
+                                </th>
+                                <th class="sortable" onclick="sortManager.sortBy('status', 'data-sort-status', 'number')" style="cursor: pointer;">
+                                    Status <i id="statusSortIcon" class="fas fa-sort ms-1"></i>
+                                </th>
+                                <th class="sortable" onclick="sortManager.sortBy('tags', 'data-sort-tags-count', 'number')" style="cursor: pointer;">
+                                    Tags <i id="tagsSortIcon" class="fas fa-sort ms-1"></i>
+                                </th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -122,7 +132,13 @@
                             {% for trigger in triggers %}
                             <tr data-trigger-name="{{ trigger.description|lower }}"
                                 data-trigger-tags="{% for tag in trigger.tags %}{{ tag.tag|lower }}:{{ tag.value|lower if tag.value else '' }} {% endfor %}"
-                                data-is-discovered="{{ 'true' if trigger.is_discovered else 'false' }}">
+                                data-is-discovered="{{ 'true' if trigger.is_discovered else 'false' }}"
+                                data-original-index="{{ loop.index0 }}"
+                                data-sort-description="{{ trigger.description|lower }}"
+                                data-sort-host="{% if trigger.hosts %}{{ trigger.hosts[0].name|lower }}{% else %}{% endif %}"
+                                data-sort-priority="{{ trigger.priority }}"
+                                data-sort-status="{{ trigger.status }}"
+                                data-sort-tags-count="{{ trigger.tags|length }}">
                                 <td>
                                     <input type="checkbox" class="trigger-checkbox" value="{{ trigger.triggerid }}">
                                 </td>
@@ -230,6 +246,9 @@
 <script>
 // Global flag for canceling bulk operations
 let cancelOperation = false;
+
+// Initialize sort manager
+let sortManager;
 
 // Function to cancel bulk operation
 function cancelBulkOperation() {
@@ -724,6 +743,17 @@ let allRows = [];
 document.addEventListener('DOMContentLoaded', function() {
     // Collect all table rows
     allRows = Array.from(document.querySelectorAll('#triggersTable tr'));
+
+    // Initialize sort manager with callback to re-paginate after sorting
+    sortManager = new TableSortManager('triggersTable', {
+        onSort: function() {
+            // Re-collect rows after sorting (DOM order changed)
+            allRows = Array.from(document.querySelectorAll('#triggersTable tr'));
+            if (allRows.length > 0) {
+                showPage(1); // Reset to first page after sorting
+            }
+        }
+    });
 
     // Initialize pagination
     if (allRows.length > 0) {

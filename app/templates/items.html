@@ -125,14 +125,24 @@
                         <thead class="table-dark">
                             <tr>
                                 <th><input type="checkbox" id="selectAllCheckbox" onchange="toggleAll()"></th>
-                                <th>Item Name</th>
-                                <th>Key</th>
-                                <th class="sortable" onclick="sortByHostCount()" style="cursor: pointer;">
-                                    Hosts <i id="hostSortIcon" class="fas fa-sort ms-1"></i>
+                                <th class="sortable" onclick="sortManager.sortBy('name', 'data-sort-name', 'string')" style="cursor: pointer;">
+                                    Item Name <i id="nameSortIcon" class="fas fa-sort ms-1"></i>
                                 </th>
-                                <th>Type</th>
-                                <th>Status</th>
-                                <th>Tags</th>
+                                <th class="sortable" onclick="sortManager.sortBy('key', 'data-sort-key', 'string')" style="cursor: pointer;">
+                                    Key <i id="keySortIcon" class="fas fa-sort ms-1"></i>
+                                </th>
+                                <th class="sortable" onclick="sortManager.sortBy('hosts', 'data-host-count', 'number')" style="cursor: pointer;">
+                                    Hosts <i id="hostsSortIcon" class="fas fa-sort ms-1"></i>
+                                </th>
+                                <th class="sortable" onclick="sortManager.sortBy('type', 'data-sort-type', 'number')" style="cursor: pointer;">
+                                    Type <i id="typeSortIcon" class="fas fa-sort ms-1"></i>
+                                </th>
+                                <th class="sortable" onclick="sortManager.sortBy('status', 'data-sort-status', 'number')" style="cursor: pointer;">
+                                    Status <i id="statusSortIcon" class="fas fa-sort ms-1"></i>
+                                </th>
+                                <th class="sortable" onclick="sortManager.sortBy('tags', 'data-sort-tags-count', 'number')" style="cursor: pointer;">
+                                    Tags <i id="tagsSortIcon" class="fas fa-sort ms-1"></i>
+                                </th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -145,7 +155,13 @@
                                 data-itemid-host-map='{{ item.itemid_host_map|tojson }}'
                                 data-itemid-tags-map='{{ item.itemid_tags_map|tojson }}'
                                 data-itemid-flags-map='{{ item.itemid_flags_map|tojson }}'
-                                data-has-discovered="{{ 'true' if item.has_discovered else 'false' }}">
+                                data-has-discovered="{{ 'true' if item.has_discovered else 'false' }}"
+                                data-original-index="{{ loop.index0 }}"
+                                data-sort-name="{{ item.name|lower }}"
+                                data-sort-key="{{ item.key_|lower }}"
+                                data-sort-type="{{ item.type }}"
+                                data-sort-status="{{ item.status }}"
+                                data-sort-tags-count="{{ item.tags|length }}">
                                 <td>
                                     <input type="checkbox" class="item-checkbox"
                                            value="{{ item.itemids|join(',') }}">
@@ -279,6 +295,9 @@ th.sortable:hover {
 <script>
 // Global flag for canceling bulk operations
 let cancelOperation = false;
+
+// Initialize sort manager
+let sortManager;
 
 // Function to cancel bulk operation
 function cancelBulkOperation() {
@@ -1031,6 +1050,17 @@ document.addEventListener('DOMContentLoaded', function() {
     // Collect all table rows
     allRows = Array.from(document.querySelectorAll('#itemsTable tr'));
 
+    // Initialize sort manager with callback to re-paginate after sorting
+    sortManager = new TableSortManager('itemsTable', {
+        onSort: function() {
+            // Re-collect rows after sorting (DOM order changed)
+            allRows = Array.from(document.querySelectorAll('#itemsTable tr'));
+            if (allRows.length > 0) {
+                showPage(1); // Reset to first page after sorting
+            }
+        }
+    });
+
     // Initialize pagination
     if (allRows.length > 0) {
         renderPagination();
@@ -1163,65 +1193,6 @@ function changePerPage(newPerPage) {
     const currentUrl = new URL(window.location);
     currentUrl.searchParams.set('per_page', newPerPage);
     window.location.href = currentUrl.toString();
-}
-
-// ========================================
-// HOST COUNT SORTING
-// ========================================
-
-let hostSortDirection = 'none'; // 'none', 'asc', 'desc'
-
-function sortByHostCount() {
-    const tbody = document.getElementById('itemsTable');
-    const rows = Array.from(tbody.querySelectorAll('tr'));
-
-    // Cycle through sort directions: none -> desc -> asc -> none
-    if (hostSortDirection === 'none') {
-        hostSortDirection = 'desc';
-    } else if (hostSortDirection === 'desc') {
-        hostSortDirection = 'asc';
-    } else {
-        hostSortDirection = 'none';
-    }
-
-    // Update sort icon
-    const sortIcon = document.getElementById('hostSortIcon');
-    if (hostSortDirection === 'desc') {
-        sortIcon.className = 'fas fa-sort-down ms-1';
-    } else if (hostSortDirection === 'asc') {
-        sortIcon.className = 'fas fa-sort-up ms-1';
-    } else {
-        sortIcon.className = 'fas fa-sort ms-1';
-    }
-
-    if (hostSortDirection === 'none') {
-        // Reset to original order - reload page
-        location.reload();
-        return;
-    }
-
-    // Sort rows by host count
-    rows.sort((a, b) => {
-        const countA = parseInt(a.getAttribute('data-host-count') || '0');
-        const countB = parseInt(b.getAttribute('data-host-count') || '0');
-
-        if (hostSortDirection === 'desc') {
-            return countB - countA;
-        } else {
-            return countA - countB;
-        }
-    });
-
-    // Re-append sorted rows
-    rows.forEach(row => tbody.appendChild(row));
-
-    // Update allRows for pagination
-    allRows = Array.from(tbody.querySelectorAll('tr'));
-
-    // Re-paginate
-    if (allRows.length > 0) {
-        showPage(1);
-    }
 }
 
 // Filter by specific host (from dropdown click)

@@ -192,6 +192,92 @@ body {
     100% { transform: rotate(360deg); }
 }
 
+/* Page Loading Bar (YouTube/GitHub style) */
+.page-loading-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #007bff, #00d4ff, #007bff);
+    background-size: 200% 100%;
+    z-index: 9999;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.page-loading-bar.active {
+    opacity: 1;
+    animation: loadingBarProgress 2s ease-in-out infinite, loadingBarShimmer 1.5s linear infinite;
+}
+
+@keyframes loadingBarProgress {
+    0% { width: 0%; }
+    20% { width: 30%; }
+    50% { width: 60%; }
+    80% { width: 85%; }
+    100% { width: 95%; }
+}
+
+@keyframes loadingBarShimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+/* Page Loading Overlay */
+.page-loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 9998;
+    display: none;
+    justify-content: center;
+    align-items: center;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.page-loading-overlay.active {
+    display: flex;
+    opacity: 1;
+}
+
+.page-loading-overlay .loading-content {
+    background-color: #ffffff;
+    padding: 2rem 3rem;
+    border-radius: 10px;
+    text-align: center;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+}
+
+.page-loading-overlay .loading-content p {
+    color: #333;
+    font-weight: 500;
+    font-size: 1.1rem;
+}
+
+.page-loading-overlay .spinner-border {
+    width: 3rem;
+    height: 3rem;
+}
+
+/* Dark theme support for loading overlay */
+[data-theme="dark"] .page-loading-overlay {
+    background-color: rgba(0, 0, 0, 0.7);
+}
+
+[data-theme="dark"] .page-loading-overlay .loading-content {
+    background-color: #2d2d2d;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+
+[data-theme="dark"] .page-loading-overlay .loading-content p {
+    color: #e0e0e0;
+}
+
 /* Tag display improvements */
 .tag-container {
     max-height: 100px;

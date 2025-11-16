@@ -13,15 +13,15 @@
             <div class="card-body">
                 <div class="row">
                     <div class="col-md-4">
-                        <input type="text" id="searchHosts" class="form-control" placeholder="Search by host name...">
+                        <input type="text" id="searchHosts" class="form-control" placeholder="Search by host name..." autocomplete="off">
                     </div>
-                    <div class="col-md-4">
-                        <input type="text" id="filterByTag" class="form-control" placeholder="Filter by tag...">
+                    <div class="col-md-3">
+                        <input type="text" id="filterByTag" class="form-control" placeholder="Filter by tag..." autocomplete="off">
                     </div>
-                    <div class="col-md-2">
+                    <div class="col-md-3">
                         <select id="filterByType" class="form-select" onchange="filterHosts()">
                             <option value="all">All hosts</option>
-                            <option value="editable">Editable only</option>
+                            <option value="editable" selected>Editable only</option>
                             <option value="discovered">Discovered only</option>
                         </select>
                     </div>
@@ -47,10 +47,10 @@
             <div class="card-body">
                 <div class="row">
                     <div class="col-md-3">
-                        <input type="text" id="bulkTagName" class="form-control" placeholder="Tag name">
+                        <input type="text" id="bulkTagName" class="form-control" placeholder="Tag name" autocomplete="off">
                     </div>
                     <div class="col-md-3">
-                        <input type="text" id="bulkTagValue" class="form-control" placeholder="Tag value (optional)">
+                        <input type="text" id="bulkTagValue" class="form-control" placeholder="Tag value (optional)" autocomplete="off">
                     </div>
                     <div class="col-md-6">
                         <button class="btn btn-success me-2" onclick="bulkAddTags()">
@@ -219,13 +219,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // Add event listeners for bulk operation fields
     document.getElementById('bulkTagName').addEventListener('input', updateBulkClearButton);
     document.getElementById('bulkTagValue').addEventListener('input', updateBulkClearButton);
-
-    // Add event listeners to save bulk fields to localStorage
-    document.getElementById('bulkTagName').addEventListener('input', saveBulkFieldsToStorage);
-    document.getElementById('bulkTagValue').addEventListener('input', saveBulkFieldsToStorage);
-
-    // Restore bulk fields from localStorage on page load
-    restoreBulkFieldsFromStorage();
 
     // Add search and filter listeners
     document.getElementById('searchHosts').addEventListener('input', filterHosts);

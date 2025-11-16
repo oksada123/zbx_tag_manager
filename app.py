@@ -32,6 +32,10 @@ def hosts():
             flash('Cannot retrieve data from Zabbix API', 'error')
             return render_template('hosts.html', hosts=[], per_page=per_page)
 
+        # Add is_discovered flag for each host
+        for host in hosts_data:
+            host['is_discovered'] = host.get('flags', '0') == '4'
+
         debug_print(f"Retrieved {len(hosts_data)} hosts")
         return render_template('hosts.html', hosts=hosts_data, per_page=per_page)
     except Exception as e:
@@ -135,16 +139,32 @@ def bulk_tag_operation():
             return jsonify({'success': False, 'message': 'Authorization error'})
 
         if operation == 'add':
-            success_count = zabbix.bulk_add_tags(host_ids, tag_name, tag_value)
+            result = zabbix.bulk_add_tags_detailed(host_ids, tag_name, tag_value)
+            message = f'Tag added to {result["success"]} hosts'
+            if result['failed'] > 0:
+                message += f' ({result["failed"]} failed - likely discovered/read-only)'
             return jsonify({
                 'success': True,
-                'message': f'Tag added to {success_count} hosts'
+                'message': message,
+                'details': {
+                    'success_count': result['success'],
+                    'failed_count': result['failed'],
+                    'failed_items': result['errors']
+                }
             })
         elif operation == 'remove':
-            success_count = zabbix.bulk_remove_tags(host_ids, tag_name)
+            result = zabbix.bulk_remove_tags_detailed(host_ids, tag_name)
+            message = f'Tag removed from {result["success"]} hosts'
+            if result['failed'] > 0:
+                message += f' ({result["failed"]} failed - likely discovered/read-only)'
             return jsonify({
                 'success': True,
-                'message': f'Tag removed from {success_count} hosts'
+                'message': message,
+                'details': {
+                    'success_count': result['success'],
+                    'failed_count': result['failed'],
+                    'failed_items': result['errors']
+                }
             })
         else:
             return jsonify({'success': False, 'message': 'Unknown operation'})
@@ -175,6 +195,10 @@ def triggers():
         if triggers_data is None:
             flash('Cannot retrieve data from Zabbix API', 'error')
             return render_template('triggers.html', triggers=[], per_page=per_page)
+
+        # Add is_discovered flag for each trigger
+        for trigger in triggers_data:
+            trigger['is_discovered'] = trigger.get('flags', '0') == '4'
 
         debug_print(f"Retrieved {len(triggers_data)} triggers")
         return render_template('triggers.html',
@@ -275,16 +299,32 @@ def bulk_trigger_operation():
             return jsonify({'success': False, 'message': 'Authorization error'})
 
         if operation == 'add':
-            success_count = zabbix.bulk_add_tags_to_triggers(trigger_ids, tag_name, tag_value)
+            result = zabbix.bulk_add_tags_to_triggers_detailed(trigger_ids, tag_name, tag_value)
+            message = f'Tag added to {result["success"]} triggers'
+            if result['failed'] > 0:
+                message += f' ({result["failed"]} failed - likely discovered/read-only)'
             return jsonify({
                 'success': True,
-                'message': f'Tag added to {success_count} triggers'
+                'message': message,
+                'details': {
+                    'success_count': result['success'],
+                    'failed_count': result['failed'],
+                    'failed_items': result['errors']
+                }
             })
         elif operation == 'remove':
-            success_count = zabbix.bulk_remove_tags_from_triggers(trigger_ids, tag_name)
+            result = zabbix.bulk_remove_tags_from_triggers_detailed(trigger_ids, tag_name)
+            message = f'Tag removed from {result["success"]} triggers'
+            if result['failed'] > 0:
+                message += f' ({result["failed"]} failed - likely discovered/read-only)'
             return jsonify({
                 'success': True,
-                'message': f'Tag removed from {success_count} triggers'
+                'message': message,
+                'details': {
+                    'success_count': result['success'],
+                    'failed_count': result['failed'],
+                    'failed_items': result['errors']
+                }
             })
         else:
             return jsonify({'success': False, 'message': 'Unknown operation'})
@@ -316,35 +356,80 @@ def items():
             flash('Cannot retrieve data from Zabbix API', 'error')
             return render_template('items.html', items=[], all_hosts=[], per_page=per_page)
 
-        # Expand items to flat list: one row per item:host combination
-        expanded_items = []
+        # Group items by key_ (each host has its own itemid for the same template item)
+        items_grouped = {}  # {key_: item_data}
         all_hosts_dict = {}  # {hostid: {hostid, name}}
 
         for item in items_data:
+            key = item['key_']
             item_hosts = item.get('hosts', [])
-            if not item_hosts:
-                # Item without host - still show it
-                expanded_items.append(item)
-            else:
-                # Create one row per host
-                for host in item_hosts:
-                    # Track unique hosts
-                    all_hosts_dict[host['hostid']] = host
 
-                    # Create item copy with single host
-                    item_copy = item.copy()
-                    item_copy['host'] = host  # Single host object
-                    item_copy['hosts'] = [host]  # Keep as list for compatibility
-                    expanded_items.append(item_copy)
+            if key not in items_grouped:
+                # First occurrence - create new grouped item
+                items_grouped[key] = item.copy()
+                items_grouped[key]['hosts'] = []
+                items_grouped[key]['itemids'] = []  # Track all itemids for bulk operations
+                items_grouped[key]['itemid_host_map'] = {}  # Map itemid -> hostid
+                items_grouped[key]['itemid_tags_map'] = {}  # Map itemid -> tags string
+                items_grouped[key]['itemid_flags_map'] = {}  # Map itemid -> flags (0=plain, 4=discovered)
+                items_grouped[key]['has_discovered'] = False  # Track if any item in group is discovered
+                items_grouped[key]['all_tags'] = {}  # Track all unique tags across all items in group {(tag, value): count}
+
+            # Add itemid to the list
+            items_grouped[key]['itemids'].append(item['itemid'])
+
+            # Map itemid to its host(s), tags, and flags
+            for host in item_hosts:
+                items_grouped[key]['itemid_host_map'][item['itemid']] = host['hostid']
+
+            # Store tags for this itemid (as searchable string)
+            item_tags_str = ' '.join([
+                f"{tag['tag'].lower()}:{tag.get('value', '').lower()}"
+                for tag in item.get('tags', [])
+            ])
+            items_grouped[key]['itemid_tags_map'][item['itemid']] = item_tags_str
+
+            # Collect all unique tags from all items in the group
+            for tag in item.get('tags', []):
+                tag_key = (tag['tag'], tag.get('value', ''))
+                if tag_key not in items_grouped[key]['all_tags']:
+                    items_grouped[key]['all_tags'][tag_key] = 0
+                items_grouped[key]['all_tags'][tag_key] += 1
+
+            # Store flags (0=plain, 4=discovered)
+            item_flags = item.get('flags', '0')
+            items_grouped[key]['itemid_flags_map'][item['itemid']] = item_flags
+            if item_flags == '4':
+                items_grouped[key]['has_discovered'] = True
+
+            # Add hosts to the grouped item (avoid duplicates)
+            existing_host_ids = {h['hostid'] for h in items_grouped[key]['hosts']}
+            for host in item_hosts:
+                if host['hostid'] not in existing_host_ids:
+                    items_grouped[key]['hosts'].append(host)
+                    existing_host_ids.add(host['hostid'])
+                # Track unique hosts for filter dropdown
+                all_hosts_dict[host['hostid']] = host
+
+        # Convert to list and add host_count
+        grouped_items = list(items_grouped.values())
+        for item in grouped_items:
+            item['host_count'] = len(item.get('hosts', []))
+            # Convert all_tags dict to list of tag objects for template
+            # This shows ALL unique tags from ALL items in the group
+            item['tags'] = [
+                {'tag': tag_name, 'value': tag_value}
+                for (tag_name, tag_value) in sorted(item.get('all_tags', {}).keys())
+            ]
 
         # Convert hosts dict to sorted list
         all_hosts = sorted(all_hosts_dict.values(), key=lambda h: h['name'].lower())
 
-        debug_print(f"Retrieved {len(items_data)} items, expanded to {len(expanded_items)} rows")
+        debug_print(f"Retrieved {len(items_data)} raw items, grouped into {len(grouped_items)} unique items")
         debug_print(f"Found {len(all_hosts)} unique hosts")
 
         return render_template('items.html',
-                             items=expanded_items,
+                             items=grouped_items,
                              all_hosts=all_hosts,
                              per_page=per_page)
     except Exception as e:
@@ -428,26 +513,20 @@ def bulk_item_operation():
         if not item_ids_raw or not isinstance(item_ids_raw, list) or len(item_ids_raw) == 0:
             return jsonify({'success': False, 'message': 'No items selected'})
 
-        # Parse item_ids - they are in format "itemid:hostid"
-        # Extract unique itemids (we operate on items, not item:host combinations)
+        # Parse item_ids - each value can be comma-separated list of itemids (grouped items)
         item_ids = []
         try:
             for value in item_ids_raw:
                 value_str = str(value)
-                # Format is "itemid:hostid", extract itemid
-                if ':' in value_str:
-                    itemid = int(value_str.split(':')[0])
-                    item_ids.append(itemid)
-                else:
-                    # Fallback: try to convert directly
-                    item_ids.append(int(value_str))
-        except (ValueError, TypeError, AttributeError) as e:
-            return jsonify({'success': False, 'message': f'Invalid item IDs format: {str(e)}'})
+                # Split by comma in case of grouped items
+                for iid in value_str.split(','):
+                    iid = iid.strip()
+                    if iid:
+                        item_ids.append(int(iid))
+        except (ValueError, TypeError) as e:
+            return jsonify({'success': False, 'message': f'Invalid item IDs: {str(e)}'})
 
-        if len(item_ids) == 0:
-            return jsonify({'success': False, 'message': 'No valid items selected'})
-
-        # Remove duplicates (same item on multiple hosts = multiple checkboxes)
+        # Remove duplicates
         item_ids = list(set(item_ids))
 
         if len(tag_name) > 255 or (tag_value and len(tag_value) > 255):
@@ -460,16 +539,32 @@ def bulk_item_operation():
             return jsonify({'success': False, 'message': 'Authorization error'})
 
         if operation == 'add':
-            success_count = zabbix.bulk_add_tags_to_items(item_ids, tag_name, tag_value)
+            result = zabbix.bulk_add_tags_to_items_detailed(item_ids, tag_name, tag_value)
+            message = f'Tag added to {result["success"]} items'
+            if result['failed'] > 0:
+                message += f' ({result["failed"]} failed - likely discovered/read-only)'
             return jsonify({
                 'success': True,
-                'message': f'Tag added to {success_count} items'
+                'message': message,
+                'details': {
+                    'success_count': result['success'],
+                    'failed_count': result['failed'],
+                    'failed_items': result['errors']
+                }
             })
         elif operation == 'remove':
-            success_count = zabbix.bulk_remove_tags_from_items(item_ids, tag_name)
+            result = zabbix.bulk_remove_tags_from_items_detailed(item_ids, tag_name)
+            message = f'Tag removed from {result["success"]} items'
+            if result['failed'] > 0:
+                message += f' ({result["failed"]} failed - likely discovered/read-only)'
             return jsonify({
                 'success': True,
-                'message': f'Tag removed from {success_count} items'
+                'message': message,
+                'details': {
+                    'success_count': result['success'],
+                    'failed_count': result['failed'],
+                    'failed_items': result['errors']
+                }
             })
         else:
             return jsonify({'success': False, 'message': 'Unknown operation'})

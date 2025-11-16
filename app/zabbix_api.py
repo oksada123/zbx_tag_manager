@@ -21,7 +21,29 @@ def validate_tag_input(tag_name: str, tag_value: str = "") -> bool:
     return True
 
 # Maximum number of items for bulk operations
-MAX_BULK_SIZE = 1000
+MAX_BULK_SIZE = int(os.getenv('MAX_BULK_SIZE', '1000'))
+
+# Object type configurations for generic methods
+OBJECT_CONFIGS = {
+    'host': {
+        'id_field': 'hostid',
+        'api_get': 'host.get',
+        'api_update': 'host.update',
+        'name_field': 'name'
+    },
+    'trigger': {
+        'id_field': 'triggerid',
+        'api_get': 'trigger.get',
+        'api_update': 'trigger.update',
+        'name_field': 'description'
+    },
+    'item': {
+        'id_field': 'itemid',
+        'api_get': 'item.get',
+        'api_update': 'item.update',
+        'name_field': 'name'
+    }
+}
 
 class ZabbixAPI:
     def __init__(self):
@@ -183,27 +205,44 @@ class ZabbixAPI:
         hosts = self.make_request("host.get", params)
         return hosts[0] if hosts else {}
 
-    def add_tag_to_host(self, host_id: int, tag_name: str, tag_value: str = "") -> bool:
-        """Add tag to host"""
-        debug_print(f" add_tag_to_host() - host_id={host_id}, tag_name={tag_name}, tag_value={tag_value}")
+    # ===============================
+    # GENERIC TAG OPERATIONS
+    # ===============================
 
-        # Validate input
+    def _add_tag_to_object(self, object_type: str, object_id: int, tag_name: str, tag_value: str = "") -> bool:
+        """Generic method to add tag to any object (host/trigger/item)"""
+        config = OBJECT_CONFIGS.get(object_type)
+        if not config:
+            debug_print(f" Unknown object type: {object_type}")
+            return False
+
+        debug_print(f" _add_tag_to_object() - {object_type}_id={object_id}, tag_name={tag_name}, tag_value={tag_value}")
+
         if not validate_tag_input(tag_name, tag_value):
             debug_print(f" Invalid tag input: tag_name='{tag_name}', tag_value='{tag_value}'")
             return False
 
-        if not isinstance(host_id, int) or host_id <= 0:
-            debug_print(f" Invalid host_id: {host_id}")
+        if not isinstance(object_id, int) or object_id <= 0:
+            debug_print(f" Invalid {object_type}_id: {object_id}")
             return False
 
-        host = self.get_host_details(host_id)
-        if not host:
-            debug_print(f" Host with ID {host_id} not found")
+        # Get object details
+        if object_type == 'host':
+            obj = self.get_host_details(object_id)
+        elif object_type == 'trigger':
+            obj = self.get_trigger_details(object_id)
+        elif object_type == 'item':
+            obj = self.get_item_details(object_id)
+        else:
             return False
 
-        debug_print(f" Found host: {host.get('name', 'Unknown')}")
-        current_tags = host.get('tags', [])
-        debug_print(f" Current host tags: {current_tags}")
+        if not obj:
+            debug_print(f" {object_type.capitalize()} with ID {object_id} not found")
+            return False
+
+        debug_print(f" Found {object_type}: {obj.get(config['name_field'], 'Unknown')}")
+        current_tags = obj.get('tags', [])
+        debug_print(f" Current {object_type} tags: {current_tags}")
 
         # Check if tag already exists
         for tag in current_tags:
@@ -216,45 +255,54 @@ class ZabbixAPI:
         current_tags.append(new_tag)
         debug_print(f" New tags after adding: {current_tags}")
 
-        # Remove 'automatic' field from tags - Zabbix API doesn't accept this field in host.update
-        clean_tags = []
-        for tag in current_tags:
-            clean_tag = {"tag": tag["tag"], "value": tag["value"]}
-            clean_tags.append(clean_tag)
-
+        # Remove 'automatic' field from tags
+        clean_tags = [{"tag": tag["tag"], "value": tag["value"]} for tag in current_tags]
         debug_print(f" Cleaned tags (without 'automatic'): {clean_tags}")
 
         params = {
-            "hostid": host_id,
+            config['id_field']: object_id,
             "tags": clean_tags
         }
 
-        debug_print(f" Sending host.update with parameters: {params}")
-        result = self.make_request("host.update", params)
-        debug_print(f" Result of host.update: {result}")
+        debug_print(f" Sending {config['api_update']} with parameters: {params}")
+        result = self.make_request(config['api_update'], params)
+        debug_print(f" Result of {config['api_update']}: {result}")
 
         return result is not None
 
-    def remove_tag_from_host(self, host_id: int, tag_name: str) -> bool:
-        """Remove tag from host"""
-        debug_print(f" remove_tag_from_host() - host_id={host_id}, tag_name={tag_name}")
+    def _remove_tag_from_object(self, object_type: str, object_id: int, tag_name: str) -> bool:
+        """Generic method to remove tag from any object (host/trigger/item)"""
+        config = OBJECT_CONFIGS.get(object_type)
+        if not config:
+            debug_print(f" Unknown object type: {object_type}")
+            return False
 
-        # Validate input
+        debug_print(f" _remove_tag_from_object() - {object_type}_id={object_id}, tag_name={tag_name}")
+
         if not tag_name or not isinstance(tag_name, str) or tag_name.strip() == "":
             debug_print(f" Invalid tag_name: '{tag_name}'")
             return False
 
-        if not isinstance(host_id, int) or host_id <= 0:
-            debug_print(f" Invalid host_id: {host_id}")
+        if not isinstance(object_id, int) or object_id <= 0:
+            debug_print(f" Invalid {object_type}_id: {object_id}")
             return False
 
-        host = self.get_host_details(host_id)
-        if not host:
-            debug_print(f" Host with ID {host_id} not found")
+        # Get object details
+        if object_type == 'host':
+            obj = self.get_host_details(object_id)
+        elif object_type == 'trigger':
+            obj = self.get_trigger_details(object_id)
+        elif object_type == 'item':
+            obj = self.get_item_details(object_id)
+        else:
             return False
 
-        current_tags = host.get('tags', [])
-        debug_print(f" Current host tags: {current_tags}")
+        if not obj:
+            debug_print(f" {object_type.capitalize()} with ID {object_id} not found")
+            return False
+
+        current_tags = obj.get('tags', [])
+        debug_print(f" Current {object_type} tags: {current_tags}")
 
         updated_tags = [tag for tag in current_tags if tag['tag'] != tag_name]
         debug_print(f" Tags after removal: {updated_tags}")
@@ -263,110 +311,124 @@ class ZabbixAPI:
             debug_print(f" Tag '{tag_name}' does not exist")
             return False
 
-        # Remove 'automatic' field from tags - Zabbix API doesn't accept this field in host.update
-        clean_tags = []
-        for tag in updated_tags:
-            clean_tag = {"tag": tag["tag"], "value": tag["value"]}
-            clean_tags.append(clean_tag)
-
+        # Remove 'automatic' field from tags
+        clean_tags = [{"tag": tag["tag"], "value": tag["value"]} for tag in updated_tags]
         debug_print(f" Cleaned tags (without 'automatic'): {clean_tags}")
 
         params = {
-            "hostid": host_id,
+            config['id_field']: object_id,
             "tags": clean_tags
         }
 
-        debug_print(f" Sending host.update with parameters: {params}")
-        result = self.make_request("host.update", params)
-        debug_print(f" Result of host.update: {result}")
+        debug_print(f" Sending {config['api_update']} with parameters: {params}")
+        result = self.make_request(config['api_update'], params)
+        debug_print(f" Result of {config['api_update']}: {result}")
 
         return result is not None
 
-    def bulk_add_tags(self, host_ids: List[int], tag_name: str, tag_value: str = "") -> int:
-        """Bulk add tags to hosts"""
-        if not host_ids or len(host_ids) == 0:
+    def _bulk_add_tags_to_objects(self, object_type: str, object_ids: List[int], tag_name: str, tag_value: str = "") -> int:
+        """Generic bulk add tags"""
+        if not object_ids or len(object_ids) == 0:
             return 0
 
-        if len(host_ids) > MAX_BULK_SIZE:
-            debug_print(f" Bulk operation limited to {MAX_BULK_SIZE} items (requested: {len(host_ids)})")
-            host_ids = host_ids[:MAX_BULK_SIZE]
+        if len(object_ids) > MAX_BULK_SIZE:
+            debug_print(f" Bulk operation limited to {MAX_BULK_SIZE} {object_type}s (requested: {len(object_ids)})")
+            object_ids = object_ids[:MAX_BULK_SIZE]
 
         success_count = 0
-
-        for host_id in host_ids:
-            if self.add_tag_to_host(host_id, tag_name, tag_value):
+        for obj_id in object_ids:
+            if self._add_tag_to_object(object_type, obj_id, tag_name, tag_value):
                 success_count += 1
 
         return success_count
+
+    def _bulk_add_tags_to_objects_detailed(self, object_type: str, object_ids: List[int], tag_name: str, tag_value: str = "") -> dict:
+        """Generic bulk add tags with detailed reporting"""
+        if not object_ids or len(object_ids) == 0:
+            return {'success': 0, 'failed': 0, 'errors': []}
+
+        if len(object_ids) > MAX_BULK_SIZE:
+            debug_print(f" Bulk operation limited to {MAX_BULK_SIZE} {object_type}s (requested: {len(object_ids)})")
+            object_ids = object_ids[:MAX_BULK_SIZE]
+
+        success_count = 0
+        failed_count = 0
+        errors = []
+
+        for obj_id in object_ids:
+            if self._add_tag_to_object(object_type, obj_id, tag_name, tag_value):
+                success_count += 1
+            else:
+                failed_count += 1
+                errors.append(obj_id)
+
+        return {'success': success_count, 'failed': failed_count, 'errors': errors}
+
+    def _bulk_remove_tags_from_objects(self, object_type: str, object_ids: List[int], tag_name: str) -> int:
+        """Generic bulk remove tags"""
+        if not object_ids or len(object_ids) == 0:
+            return 0
+
+        if len(object_ids) > MAX_BULK_SIZE:
+            debug_print(f" Bulk operation limited to {MAX_BULK_SIZE} {object_type}s (requested: {len(object_ids)})")
+            object_ids = object_ids[:MAX_BULK_SIZE]
+
+        success_count = 0
+        for obj_id in object_ids:
+            if self._remove_tag_from_object(object_type, obj_id, tag_name):
+                success_count += 1
+
+        return success_count
+
+    def _bulk_remove_tags_from_objects_detailed(self, object_type: str, object_ids: List[int], tag_name: str) -> dict:
+        """Generic bulk remove tags with detailed reporting"""
+        if not object_ids or len(object_ids) == 0:
+            return {'success': 0, 'failed': 0, 'errors': []}
+
+        if len(object_ids) > MAX_BULK_SIZE:
+            debug_print(f" Bulk operation limited to {MAX_BULK_SIZE} {object_type}s (requested: {len(object_ids)})")
+            object_ids = object_ids[:MAX_BULK_SIZE]
+
+        success_count = 0
+        failed_count = 0
+        errors = []
+
+        for obj_id in object_ids:
+            if self._remove_tag_from_object(object_type, obj_id, tag_name):
+                success_count += 1
+            else:
+                failed_count += 1
+                errors.append(obj_id)
+
+        return {'success': success_count, 'failed': failed_count, 'errors': errors}
+
+    # ===============================
+    # HOST TAG OPERATIONS (wrappers)
+    # ===============================
+
+    def add_tag_to_host(self, host_id: int, tag_name: str, tag_value: str = "") -> bool:
+        """Add tag to host"""
+        return self._add_tag_to_object('host', host_id, tag_name, tag_value)
+
+    def remove_tag_from_host(self, host_id: int, tag_name: str) -> bool:
+        """Remove tag from host"""
+        return self._remove_tag_from_object('host', host_id, tag_name)
+
+    def bulk_add_tags(self, host_ids: List[int], tag_name: str, tag_value: str = "") -> int:
+        """Bulk add tags to hosts"""
+        return self._bulk_add_tags_to_objects('host', host_ids, tag_name, tag_value)
 
     def bulk_add_tags_detailed(self, host_ids: List[int], tag_name: str, tag_value: str = "") -> dict:
         """Bulk add tags to hosts with detailed error reporting"""
-        if not host_ids or len(host_ids) == 0:
-            return {'success': 0, 'failed': 0, 'errors': []}
-
-        if len(host_ids) > MAX_BULK_SIZE:
-            debug_print(f" Bulk operation limited to {MAX_BULK_SIZE} hosts (requested: {len(host_ids)})")
-            host_ids = host_ids[:MAX_BULK_SIZE]
-
-        success_count = 0
-        failed_count = 0
-        errors = []
-
-        for host_id in host_ids:
-            if self.add_tag_to_host(host_id, tag_name, tag_value):
-                success_count += 1
-            else:
-                failed_count += 1
-                errors.append(host_id)
-
-        return {
-            'success': success_count,
-            'failed': failed_count,
-            'errors': errors
-        }
+        return self._bulk_add_tags_to_objects_detailed('host', host_ids, tag_name, tag_value)
 
     def bulk_remove_tags(self, host_ids: List[int], tag_name: str) -> int:
         """Bulk remove tags from hosts"""
-        if not host_ids or len(host_ids) == 0:
-            return 0
-
-        if len(host_ids) > MAX_BULK_SIZE:
-            debug_print(f" Bulk operation limited to {MAX_BULK_SIZE} items (requested: {len(host_ids)})")
-            host_ids = host_ids[:MAX_BULK_SIZE]
-
-        success_count = 0
-
-        for host_id in host_ids:
-            if self.remove_tag_from_host(host_id, tag_name):
-                success_count += 1
-
-        return success_count
+        return self._bulk_remove_tags_from_objects('host', host_ids, tag_name)
 
     def bulk_remove_tags_detailed(self, host_ids: List[int], tag_name: str) -> dict:
         """Bulk remove tags from hosts with detailed error reporting"""
-        if not host_ids or len(host_ids) == 0:
-            return {'success': 0, 'failed': 0, 'errors': []}
-
-        if len(host_ids) > MAX_BULK_SIZE:
-            debug_print(f" Bulk operation limited to {MAX_BULK_SIZE} hosts (requested: {len(host_ids)})")
-            host_ids = host_ids[:MAX_BULK_SIZE]
-
-        success_count = 0
-        failed_count = 0
-        errors = []
-
-        for host_id in host_ids:
-            if self.remove_tag_from_host(host_id, tag_name):
-                success_count += 1
-            else:
-                failed_count += 1
-                errors.append(host_id)
-
-        return {
-            'success': success_count,
-            'failed': failed_count,
-            'errors': errors
-        }
+        return self._bulk_remove_tags_from_objects_detailed('host', host_ids, tag_name)
 
     def get_all_tags(self) -> List[str]:
         """Fetch all used tags in the system"""
@@ -441,188 +503,27 @@ class ZabbixAPI:
 
     def add_tag_to_trigger(self, trigger_id: int, tag_name: str, tag_value: str = "") -> bool:
         """Add tag to trigger"""
-        debug_print(f" add_tag_to_trigger() - trigger_id={trigger_id}, tag_name={tag_name}, tag_value={tag_value}")
-
-        # Validate input
-        if not validate_tag_input(tag_name, tag_value):
-            debug_print(f" Invalid tag input: tag_name='{tag_name}', tag_value='{tag_value}'")
-            return False
-
-        if not isinstance(trigger_id, int) or trigger_id <= 0:
-            debug_print(f" Invalid trigger_id: {trigger_id}")
-            return False
-
-        trigger = self.get_trigger_details(trigger_id)
-        if not trigger:
-            debug_print(f" Trigger with ID {trigger_id} not found")
-            return False
-
-        debug_print(f" Found trigger: {trigger.get('description', 'Unknown')}")
-        current_tags = trigger.get('tags', [])
-        debug_print(f" Current trigger tags: {current_tags}")
-
-        # Check if tag already exists
-        for tag in current_tags:
-            if tag['tag'] == tag_name:
-                debug_print(f" Tag '{tag_name}' already exists")
-                return False
-
-        # Add new tag
-        new_tag = {"tag": tag_name, "value": tag_value}
-        current_tags.append(new_tag)
-        debug_print(f" New tags after adding: {current_tags}")
-
-        # Remove 'automatic' field from tags - Zabbix API doesn't accept this field in trigger.update
-        clean_tags = []
-        for tag in current_tags:
-            clean_tag = {"tag": tag["tag"], "value": tag["value"]}
-            clean_tags.append(clean_tag)
-
-        debug_print(f" Cleaned tags (without 'automatic'): {clean_tags}")
-
-        params = {
-            "triggerid": trigger_id,
-            "tags": clean_tags
-        }
-
-        debug_print(f" Sending trigger.update with parameters: {params}")
-        result = self.make_request("trigger.update", params)
-        debug_print(f" Result of trigger.update: {result}")
-
-        return result is not None
+        return self._add_tag_to_object('trigger', trigger_id, tag_name, tag_value)
 
     def remove_tag_from_trigger(self, trigger_id: int, tag_name: str) -> bool:
         """Remove tag from trigger"""
-        debug_print(f" remove_tag_from_trigger() - trigger_id={trigger_id}, tag_name={tag_name}")
-
-        # Validate input
-        if not tag_name or not isinstance(tag_name, str) or tag_name.strip() == "":
-            debug_print(f" Invalid tag_name: '{tag_name}'")
-            return False
-
-        if not isinstance(trigger_id, int) or trigger_id <= 0:
-            debug_print(f" Invalid trigger_id: {trigger_id}")
-            return False
-
-        trigger = self.get_trigger_details(trigger_id)
-        if not trigger:
-            debug_print(f" Trigger with ID {trigger_id} not found")
-            return False
-
-        current_tags = trigger.get('tags', [])
-        debug_print(f" Current trigger tags: {current_tags}")
-
-        updated_tags = [tag for tag in current_tags if tag['tag'] != tag_name]
-        debug_print(f" Tags after removal: {updated_tags}")
-
-        if len(updated_tags) == len(current_tags):
-            debug_print(f" Tag '{tag_name}' does not exist")
-            return False
-
-        # Remove 'automatic' field from tags
-        clean_tags = []
-        for tag in updated_tags:
-            clean_tag = {"tag": tag["tag"], "value": tag["value"]}
-            clean_tags.append(clean_tag)
-
-        debug_print(f" Cleaned tags (without 'automatic'): {clean_tags}")
-
-        params = {
-            "triggerid": trigger_id,
-            "tags": clean_tags
-        }
-
-        debug_print(f" Sending trigger.update with parameters: {params}")
-        result = self.make_request("trigger.update", params)
-        debug_print(f" Result of trigger.update: {result}")
-
-        return result is not None
+        return self._remove_tag_from_object('trigger', trigger_id, tag_name)
 
     def bulk_add_tags_to_triggers(self, trigger_ids: List[int], tag_name: str, tag_value: str = "") -> int:
         """Bulk add tags to triggers"""
-        if not trigger_ids or len(trigger_ids) == 0:
-            return 0
-
-        if len(trigger_ids) > MAX_BULK_SIZE:
-            debug_print(f" Bulk operation limited to {MAX_BULK_SIZE} items (requested: {len(trigger_ids)})")
-            trigger_ids = trigger_ids[:MAX_BULK_SIZE]
-
-        success_count = 0
-
-        for trigger_id in trigger_ids:
-            if self.add_tag_to_trigger(trigger_id, tag_name, tag_value):
-                success_count += 1
-
-        return success_count
+        return self._bulk_add_tags_to_objects('trigger', trigger_ids, tag_name, tag_value)
 
     def bulk_add_tags_to_triggers_detailed(self, trigger_ids: List[int], tag_name: str, tag_value: str = "") -> dict:
         """Bulk add tags to triggers with detailed error reporting"""
-        if not trigger_ids or len(trigger_ids) == 0:
-            return {'success': 0, 'failed': 0, 'errors': []}
-
-        if len(trigger_ids) > MAX_BULK_SIZE:
-            debug_print(f" Bulk operation limited to {MAX_BULK_SIZE} triggers (requested: {len(trigger_ids)})")
-            trigger_ids = trigger_ids[:MAX_BULK_SIZE]
-
-        success_count = 0
-        failed_count = 0
-        errors = []
-
-        for trigger_id in trigger_ids:
-            if self.add_tag_to_trigger(trigger_id, tag_name, tag_value):
-                success_count += 1
-            else:
-                failed_count += 1
-                errors.append(trigger_id)
-
-        return {
-            'success': success_count,
-            'failed': failed_count,
-            'errors': errors
-        }
+        return self._bulk_add_tags_to_objects_detailed('trigger', trigger_ids, tag_name, tag_value)
 
     def bulk_remove_tags_from_triggers(self, trigger_ids: List[int], tag_name: str) -> int:
         """Bulk remove tags from triggers"""
-        if not trigger_ids or len(trigger_ids) == 0:
-            return 0
-
-        if len(trigger_ids) > MAX_BULK_SIZE:
-            debug_print(f" Bulk operation limited to {MAX_BULK_SIZE} items (requested: {len(trigger_ids)})")
-            trigger_ids = trigger_ids[:MAX_BULK_SIZE]
-
-        success_count = 0
-
-        for trigger_id in trigger_ids:
-            if self.remove_tag_from_trigger(trigger_id, tag_name):
-                success_count += 1
-
-        return success_count
+        return self._bulk_remove_tags_from_objects('trigger', trigger_ids, tag_name)
 
     def bulk_remove_tags_from_triggers_detailed(self, trigger_ids: List[int], tag_name: str) -> dict:
         """Bulk remove tags from triggers with detailed error reporting"""
-        if not trigger_ids or len(trigger_ids) == 0:
-            return {'success': 0, 'failed': 0, 'errors': []}
-
-        if len(trigger_ids) > MAX_BULK_SIZE:
-            debug_print(f" Bulk operation limited to {MAX_BULK_SIZE} triggers (requested: {len(trigger_ids)})")
-            trigger_ids = trigger_ids[:MAX_BULK_SIZE]
-
-        success_count = 0
-        failed_count = 0
-        errors = []
-
-        for trigger_id in trigger_ids:
-            if self.remove_tag_from_trigger(trigger_id, tag_name):
-                success_count += 1
-            else:
-                failed_count += 1
-                errors.append(trigger_id)
-
-        return {
-            'success': success_count,
-            'failed': failed_count,
-            'errors': errors
-        }
+        return self._bulk_remove_tags_from_objects_detailed('trigger', trigger_ids, tag_name)
 
     def search_triggers_by_tag(self, tag_name: str, tag_value: str = None) -> List[Dict[str, Any]]:
         """Search triggers by tag"""
@@ -688,188 +589,27 @@ class ZabbixAPI:
 
     def add_tag_to_item(self, item_id: int, tag_name: str, tag_value: str = "") -> bool:
         """Add tag to item"""
-        debug_print(f" add_tag_to_item() - item_id={item_id}, tag_name={tag_name}, tag_value={tag_value}")
-
-        # Validate input
-        if not validate_tag_input(tag_name, tag_value):
-            debug_print(f" Invalid tag input: tag_name='{tag_name}', tag_value='{tag_value}'")
-            return False
-
-        if not isinstance(item_id, int) or item_id <= 0:
-            debug_print(f" Invalid item_id: {item_id}")
-            return False
-
-        item = self.get_item_details(item_id)
-        if not item:
-            debug_print(f" Item with ID {item_id} not found")
-            return False
-
-        debug_print(f" Found item: {item.get('name', 'Unknown')}")
-        current_tags = item.get('tags', [])
-        debug_print(f" Current item tags: {current_tags}")
-
-        # Check if tag already exists
-        for tag in current_tags:
-            if tag['tag'] == tag_name:
-                debug_print(f" Tag '{tag_name}' already exists")
-                return False
-
-        # Add new tag
-        new_tag = {"tag": tag_name, "value": tag_value}
-        current_tags.append(new_tag)
-        debug_print(f" New tags after adding: {current_tags}")
-
-        # Remove 'automatic' field from tags - Zabbix API doesn't accept this field in item.update
-        clean_tags = []
-        for tag in current_tags:
-            clean_tag = {"tag": tag["tag"], "value": tag["value"]}
-            clean_tags.append(clean_tag)
-
-        debug_print(f" Cleaned tags (without 'automatic'): {clean_tags}")
-
-        params = {
-            "itemid": item_id,
-            "tags": clean_tags
-        }
-
-        debug_print(f" Sending item.update with parameters: {params}")
-        result = self.make_request("item.update", params)
-        debug_print(f" Result of item.update: {result}")
-
-        return result is not None
+        return self._add_tag_to_object('item', item_id, tag_name, tag_value)
 
     def remove_tag_from_item(self, item_id: int, tag_name: str) -> bool:
         """Remove tag from item"""
-        debug_print(f" remove_tag_from_item() - item_id={item_id}, tag_name={tag_name}")
-
-        # Validate input
-        if not tag_name or not isinstance(tag_name, str) or tag_name.strip() == "":
-            debug_print(f" Invalid tag_name: '{tag_name}'")
-            return False
-
-        if not isinstance(item_id, int) or item_id <= 0:
-            debug_print(f" Invalid item_id: {item_id}")
-            return False
-
-        item = self.get_item_details(item_id)
-        if not item:
-            debug_print(f" Item with ID {item_id} not found")
-            return False
-
-        current_tags = item.get('tags', [])
-        debug_print(f" Current item tags: {current_tags}")
-
-        updated_tags = [tag for tag in current_tags if tag['tag'] != tag_name]
-        debug_print(f" Tags after removal: {updated_tags}")
-
-        if len(updated_tags) == len(current_tags):
-            debug_print(f" Tag '{tag_name}' does not exist")
-            return False
-
-        # Remove 'automatic' field from tags
-        clean_tags = []
-        for tag in updated_tags:
-            clean_tag = {"tag": tag["tag"], "value": tag["value"]}
-            clean_tags.append(clean_tag)
-
-        debug_print(f" Cleaned tags (without 'automatic'): {clean_tags}")
-
-        params = {
-            "itemid": item_id,
-            "tags": clean_tags
-        }
-
-        debug_print(f" Sending item.update with parameters: {params}")
-        result = self.make_request("item.update", params)
-        debug_print(f" Result of item.update: {result}")
-
-        return result is not None
+        return self._remove_tag_from_object('item', item_id, tag_name)
 
     def bulk_add_tags_to_items(self, item_ids: List[int], tag_name: str, tag_value: str = "") -> int:
         """Bulk add tags to items"""
-        if not item_ids or len(item_ids) == 0:
-            return 0
-
-        if len(item_ids) > MAX_BULK_SIZE:
-            debug_print(f" Bulk operation limited to {MAX_BULK_SIZE} items (requested: {len(item_ids)})")
-            item_ids = item_ids[:MAX_BULK_SIZE]
-
-        success_count = 0
-
-        for item_id in item_ids:
-            if self.add_tag_to_item(item_id, tag_name, tag_value):
-                success_count += 1
-
-        return success_count
+        return self._bulk_add_tags_to_objects('item', item_ids, tag_name, tag_value)
 
     def bulk_add_tags_to_items_detailed(self, item_ids: List[int], tag_name: str, tag_value: str = "") -> dict:
         """Bulk add tags to items with detailed error reporting"""
-        if not item_ids or len(item_ids) == 0:
-            return {'success': 0, 'failed': 0, 'errors': []}
-
-        if len(item_ids) > MAX_BULK_SIZE:
-            debug_print(f" Bulk operation limited to {MAX_BULK_SIZE} items (requested: {len(item_ids)})")
-            item_ids = item_ids[:MAX_BULK_SIZE]
-
-        success_count = 0
-        failed_count = 0
-        errors = []
-
-        for item_id in item_ids:
-            if self.add_tag_to_item(item_id, tag_name, tag_value):
-                success_count += 1
-            else:
-                failed_count += 1
-                errors.append(item_id)
-
-        return {
-            'success': success_count,
-            'failed': failed_count,
-            'errors': errors
-        }
+        return self._bulk_add_tags_to_objects_detailed('item', item_ids, tag_name, tag_value)
 
     def bulk_remove_tags_from_items(self, item_ids: List[int], tag_name: str) -> int:
         """Bulk remove tags from items"""
-        if not item_ids or len(item_ids) == 0:
-            return 0
-
-        if len(item_ids) > MAX_BULK_SIZE:
-            debug_print(f" Bulk operation limited to {MAX_BULK_SIZE} items (requested: {len(item_ids)})")
-            item_ids = item_ids[:MAX_BULK_SIZE]
-
-        success_count = 0
-
-        for item_id in item_ids:
-            if self.remove_tag_from_item(item_id, tag_name):
-                success_count += 1
-
-        return success_count
+        return self._bulk_remove_tags_from_objects('item', item_ids, tag_name)
 
     def bulk_remove_tags_from_items_detailed(self, item_ids: List[int], tag_name: str) -> dict:
         """Bulk remove tags from items with detailed error reporting"""
-        if not item_ids or len(item_ids) == 0:
-            return {'success': 0, 'failed': 0, 'errors': []}
-
-        if len(item_ids) > MAX_BULK_SIZE:
-            debug_print(f" Bulk operation limited to {MAX_BULK_SIZE} items (requested: {len(item_ids)})")
-            item_ids = item_ids[:MAX_BULK_SIZE]
-
-        success_count = 0
-        failed_count = 0
-        errors = []
-
-        for item_id in item_ids:
-            if self.remove_tag_from_item(item_id, tag_name):
-                success_count += 1
-            else:
-                failed_count += 1
-                errors.append(item_id)
-
-        return {
-            'success': success_count,
-            'failed': failed_count,
-            'errors': errors
-        }
+        return self._bulk_remove_tags_from_objects_detailed('item', item_ids, tag_name)
 
     def search_items_by_tag(self, tag_name: str, tag_value: str = None) -> List[Dict[str, Any]]:
         """Search items by tag"""

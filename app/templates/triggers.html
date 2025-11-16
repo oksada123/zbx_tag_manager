@@ -244,649 +244,122 @@
 </div>
 
 <script>
-// Global flag for canceling bulk operations
-let cancelOperation = false;
-
-// Initialize sort manager
+// Global managers
 let sortManager;
+let selectionManager;
+let paginationManager;
+let bulkManager;
+let filterManager;
 
-// Function to cancel bulk operation
-function cancelBulkOperation() {
-    if (confirm('Are you sure you want to cancel? Tags already processed will remain.')) {
-        cancelOperation = true;
-        document.getElementById('cancelBulkBtn').disabled = true;
-        document.getElementById('progressText').textContent = 'Canceling operation...';
-    }
-}
-
-// Show spinner during loading
+// Initialize all managers on page load
 document.addEventListener('DOMContentLoaded', function() {
-    // Check if we have triggers
-    const triggersTable = document.getElementById('triggersTable');
-    const loadingSpinner = document.getElementById('loadingSpinner');
-
+    // Show loading spinner if no triggers
     {% if not triggers %}
-        // If no triggers, show spinner for 2 seconds (loading simulation)
+    const loadingSpinner = document.getElementById('loadingSpinner');
+    if (loadingSpinner) {
         loadingSpinner.style.display = 'block';
         setTimeout(() => {
             loadingSpinner.style.display = 'none';
         }, 2000);
+    }
     {% endif %}
 
-    // Add event listener to each trigger checkbox
-    document.querySelectorAll('.trigger-checkbox').forEach(checkbox => {
-        checkbox.addEventListener('change', updateSelectAllCheckbox);
+    // Initialize Selection Manager
+    selectionManager = new SelectionManager({
+        tableId: 'triggersTable',
+        checkboxClass: 'trigger-checkbox',
+        rowDataAttr: 'data-trigger-name',
+        discoveredAttr: 'data-is-discovered',
+        onSelectionChange: () => bulkManager.updateStatus()
     });
 
-    // Check filter state after page load and apply them
-    initializeFiltersOnLoad();
+    // Initialize Bulk Operations Manager
+    bulkManager = new BulkOperationsManager({
+        apiEndpoint: '/api/triggers/tags/bulk',
+        entityName: 'triggers',
+        entityIdField: 'trigger_ids',
+        storageKeyPrefix: 'bulkTagName_triggers',
+        getSelectedItems: () => selectionManager.getSelectedValues(),
+        getSelectionInfo: () => selectionManager.getSelectedCount()
+    });
 
-    // Add event listeners for bulk operation fields
-    document.getElementById('bulkTagName').addEventListener('input', updateBulkClearButton);
-    document.getElementById('bulkTagValue').addEventListener('input', updateBulkClearButton);
+    // Initialize Filter Manager
+    filterManager = new FilterManager({
+        tableId: 'triggersTable',
+        searchInputId: 'searchTriggers',
+        tagFilterInputId: 'filterByTag',
+        typeFilterId: 'filterByType',
+        rowDataAttr: 'data-trigger-name',
+        rowTagsAttr: 'data-trigger-tags',
+        discoveredAttr: 'data-is-discovered',
+        checkboxClass: 'trigger-checkbox',
+        entityName: 'triggers',
+        onFilter: () => {
+            selectionManager.updateSelectAllCheckbox();
+            if (paginationManager) paginationManager.showPage(1);
+        }
+    });
 
-    // Add search and filter listeners
-    document.getElementById('searchTriggers').addEventListener('input', filterTriggers);
-    document.getElementById('filterByTag').addEventListener('input', filterTriggers);
+    // Initialize Pagination Manager
+    paginationManager = new PaginationManager({
+        tableId: 'triggersTable',
+        rowDataAttr: 'data-trigger-name',
+        itemsPerPage: {{ per_page }},
+        entityName: 'triggers',
+        onPageChange: () => selectionManager.updateSelectAllCheckbox()
+    });
+
+    // Initialize Sort Manager with callback to re-paginate after sorting
+    sortManager = new TableSortManager('triggersTable', {
+        onSort: function() {
+            paginationManager.refreshRows();
+            paginationManager.showPage(1);
+        }
+    });
+
+    // Initialize filters on load
+    filterManager.initializeOnLoad();
 });
 
-function initializeFiltersOnLoad() {
-    const searchTerm = document.getElementById('searchTriggers').value.trim();
-    const tagFilter = document.getElementById('filterByTag').value.trim();
-
-    if (searchTerm || tagFilter) {
-        // If there are values in filters, apply filtering
-        filterTriggers();
-    } else {
-        // If filters are empty, hide "Clear" button
-        document.getElementById('clearFiltersBtn').style.display = 'none';
-    }
+// Wrapper functions for HTML onclick handlers
+function cancelBulkOperation() {
+    bulkManager.cancelCurrentOperation();
 }
 
 function filterTriggers() {
-    const searchTerm = document.getElementById('searchTriggers').value.toLowerCase();
-    const tagFilter = document.getElementById('filterByTag').value.toLowerCase();
-    const typeFilter = document.getElementById('filterByType').value;
-    const rows = document.querySelectorAll('#triggersTable tr');
-
-    let visibleCount = 0;
-    let totalCount = 0;
-
-    rows.forEach(row => {
-        const triggerName = row.getAttribute('data-trigger-name');
-        const triggerTags = row.getAttribute('data-trigger-tags');
-        const isDiscovered = row.getAttribute('data-is-discovered') === 'true';
-
-        if (triggerName && triggerTags !== null) { // Check if it's a row with trigger data
-            totalCount++;
-
-            const matchesSearch = !searchTerm || triggerName.includes(searchTerm);
-            const matchesTag = !tagFilter || (triggerTags && triggerTags.includes(tagFilter));
-
-            // Check type filter
-            let matchesType = true;
-            if (typeFilter === 'editable') {
-                matchesType = !isDiscovered;
-            } else if (typeFilter === 'discovered') {
-                matchesType = isDiscovered;
-            }
-
-            if (matchesSearch && matchesTag && matchesType) {
-                row.style.display = '';
-                visibleCount++;
-            } else {
-                row.style.display = 'none';
-                // Uncheck hidden triggers
-                const checkbox = row.querySelector('.trigger-checkbox');
-                if (checkbox) {
-                    checkbox.checked = false;
-                }
-            }
-        }
-    });
-
-    // Update filter status
-    updateFilterStatus(searchTerm, tagFilter, visibleCount, totalCount, typeFilter);
-
-    // Update main checkbox state after filtering
-    updateSelectAllCheckbox();
-
-    // Re-paginate after filtering (if pagination is initialized)
-    if (typeof showPage === 'function' && allRows.length > 0) {
-        showPage(1);
-    }
+    filterManager.filter();
 }
 
-function updateFilterStatus(searchTerm, tagFilter, visibleCount, totalCount, typeFilter = 'all') {
-    const statusElement = document.getElementById('filterStatus');
-    const clearBtn = document.getElementById('clearFiltersBtn');
-    const paginationContainer = document.getElementById('paginationContainer');
-
-    const hasFilters = searchTerm || tagFilter || typeFilter !== 'all';
-
-    if (hasFilters) {
-        let statusParts = [];
-        if (searchTerm) statusParts.push(`name: "${searchTerm}"`);
-        if (tagFilter) statusParts.push(`tag: "${tagFilter}"`);
-        if (typeFilter === 'editable') statusParts.push('editable only');
-        if (typeFilter === 'discovered') statusParts.push('discovered only');
-
-        statusElement.textContent = `Showing ${visibleCount} of ${totalCount} triggers (filtered by ${statusParts.join(', ')})`;
-        clearBtn.style.display = '';
-        // Hide pagination during filtering
-        if (paginationContainer) {
-            paginationContainer.style.display = 'none';
-        }
-    } else {
-        statusElement.textContent = '';
-        clearBtn.style.display = 'none';
-        // Show pagination when no filters
-        if (paginationContainer) {
-            paginationContainer.style.display = '';
-        }
-    }
-}
-
-// Clear filters function
 function clearFilters() {
-    // Clear search fields
-    document.getElementById('searchTriggers').value = '';
-    document.getElementById('filterByTag').value = '';
-    document.getElementById('filterByType').value = 'all';
-
-    // Show all rows
-    const rows = document.querySelectorAll('#triggersTable tr');
-    let totalCount = 0;
-
-    rows.forEach(row => {
-        const triggerName = row.getAttribute('data-trigger-name');
-        if (triggerName) { // Only rows with trigger data
-            totalCount++;
-        }
-        row.style.display = '';
-    });
-
-    // Update filter status
-    updateFilterStatus('', '', totalCount, totalCount, 'all');
-
-    // Update main checkbox state
-    updateSelectAllCheckbox();
+    filterManager.clear();
 }
 
-// Function to update main checkbox state
-function updateSelectAllCheckbox() {
-    const visibleCheckboxes = [];
-    document.querySelectorAll('#triggersTable tr').forEach(row => {
-        if (row.style.display !== 'none') {
-            const checkbox = row.querySelector('.trigger-checkbox');
-            if (checkbox) {
-                visibleCheckboxes.push(checkbox);
-            }
-        }
-    });
-
-    const checkedVisibleCheckboxes = visibleCheckboxes.filter(cb => cb.checked);
-    const selectAllCheckbox = document.getElementById('selectAllCheckbox');
-
-    if (visibleCheckboxes.length === 0) {
-        selectAllCheckbox.checked = false;
-        selectAllCheckbox.indeterminate = false;
-    } else if (checkedVisibleCheckboxes.length === visibleCheckboxes.length) {
-        selectAllCheckbox.checked = true;
-        selectAllCheckbox.indeterminate = false;
-    } else if (checkedVisibleCheckboxes.length > 0) {
-        selectAllCheckbox.checked = false;
-        selectAllCheckbox.indeterminate = true;
-    } else {
-        selectAllCheckbox.checked = false;
-        selectAllCheckbox.indeterminate = false;
-    }
-
-    updateBulkStatus();
-}
-
-// Selection functions - only visible triggers
 function selectAll() {
-    // Check only checkboxes in visible rows
-    document.querySelectorAll('#triggersTable tr').forEach(row => {
-        if (row.style.display !== 'none') {
-            const checkbox = row.querySelector('.trigger-checkbox');
-            if (checkbox) {
-                checkbox.checked = true;
-            }
-        }
-    });
-    document.getElementById('selectAllCheckbox').checked = true;
-    updateBulkStatus();
+    selectionManager.selectAll();
 }
 
 function deselectAll() {
-    // Uncheck only checkboxes in visible rows
-    document.querySelectorAll('#triggersTable tr').forEach(row => {
-        if (row.style.display !== 'none') {
-            const checkbox = row.querySelector('.trigger-checkbox');
-            if (checkbox) {
-                checkbox.checked = false;
-            }
-        }
-    });
-    document.getElementById('selectAllCheckbox').checked = false;
-    updateBulkStatus();
+    selectionManager.deselectAll();
 }
 
 function toggleAll() {
-    const selectAll = document.getElementById('selectAllCheckbox').checked;
-    // Toggle only checkboxes in visible rows
-    document.querySelectorAll('#triggersTable tr').forEach(row => {
-        if (row.style.display !== 'none') {
-            const checkbox = row.querySelector('.trigger-checkbox');
-            if (checkbox) {
-                checkbox.checked = selectAll;
-            }
-        }
-    });
-    updateBulkStatus();
+    selectionManager.toggleAll();
 }
 
-// Update bulk status
-function updateBulkStatus() {
-    const selectedCheckboxes = [];
-    let discoveredCount = 0;
-
-    document.querySelectorAll('#triggersTable tr').forEach(row => {
-        if (row.style.display !== 'none') {
-            const checkbox = row.querySelector('.trigger-checkbox');
-            if (checkbox && checkbox.checked) {
-                selectedCheckboxes.push(checkbox);
-                if (row.getAttribute('data-is-discovered') === 'true') {
-                    discoveredCount++;
-                }
-            }
-        }
-    });
-
-    const statusElement = document.getElementById('bulkStatus');
-    const count = selectedCheckboxes.length;
-
-    const tagName = document.getElementById('bulkTagName').value.trim();
-    const tagValue = document.getElementById('bulkTagValue').value.trim();
-    const hasInput = tagName || tagValue;
-
-    if (count > 0 || hasInput) {
-        if (count === 0) {
-            statusElement.textContent = 'No triggers selected';
-        } else {
-            let statusText = count === 1 ? '1 trigger selected' : `${count} triggers selected`;
-            if (discoveredCount > 0) {
-                statusText += ` - ${discoveredCount} discovered (may fail)`;
-            }
-            statusElement.textContent = statusText;
-        }
-    } else {
-        statusElement.textContent = '';
-    }
-}
-
-// Update bulk clear button visibility
-function updateBulkClearButton() {
-    const tagName = document.getElementById('bulkTagName').value.trim();
-    const tagValue = document.getElementById('bulkTagValue').value.trim();
-    const clearBtn = document.getElementById('clearBulkBtn');
-
-    if (tagName || tagValue) {
-        clearBtn.style.display = '';
-    } else {
-        clearBtn.style.display = 'none';
-    }
-
-    updateBulkStatus();
-}
-
-// Save bulk fields to localStorage
-function saveBulkFieldsToStorage() {
-    const tagName = document.getElementById('bulkTagName').value;
-    const tagValue = document.getElementById('bulkTagValue').value;
-    localStorage.setItem('bulkTagName_triggers', tagName);
-    localStorage.setItem('bulkTagValue_triggers', tagValue);
-}
-
-// Restore bulk fields from localStorage
-function restoreBulkFieldsFromStorage() {
-    const tagName = localStorage.getItem('bulkTagName_triggers') || '';
-    const tagValue = localStorage.getItem('bulkTagValue_triggers') || '';
-
-    if (tagName || tagValue) {
-        document.getElementById('bulkTagName').value = tagName;
-        document.getElementById('bulkTagValue').value = tagValue;
-        updateBulkClearButton();
-    }
-}
-
-// Clear bulk fields function
 function clearBulkFields() {
-    document.getElementById('bulkTagName').value = '';
-    document.getElementById('bulkTagValue').value = '';
-    document.getElementById('clearBulkBtn').style.display = 'none';
-
-    // Clear from localStorage
-    localStorage.removeItem('bulkTagName_triggers');
-    localStorage.removeItem('bulkTagValue_triggers');
-
-    updateBulkStatus();
+    bulkManager.clearFields();
 }
 
-// Bulk operations
 function bulkAddTags() {
-    const tagName = document.getElementById('bulkTagName').value.trim();
-    const tagValue = document.getElementById('bulkTagValue').value.trim();
-
-    if (!tagName) {
-        alert('Please provide a tag name');
-        return;
-    }
-
-    const selectedTriggers = getSelectedTriggers();
-    if (selectedTriggers.length === 0) {
-        alert('Please select at least one trigger');
-        return;
-    }
-
-    if (confirm(`Are you sure you want to add tag "${tagName}" to ${selectedTriggers.length} triggers?`)) {
-        bulkOperation('add', selectedTriggers, tagName, tagValue);
-    }
+    bulkManager.addTags();
 }
 
 function bulkRemoveTags() {
-    const tagName = document.getElementById('bulkTagName').value.trim();
-
-    if (!tagName) {
-        alert('Please provide a tag name');
-        return;
-    }
-
-    const selectedTriggers = getSelectedTriggers();
-    if (selectedTriggers.length === 0) {
-        alert('Please select at least one trigger');
-        return;
-    }
-
-    if (confirm(`Are you sure you want to remove tag "${tagName}" from ${selectedTriggers.length} triggers?`)) {
-        bulkOperation('remove', selectedTriggers, tagName, '');
-    }
+    bulkManager.removeTags();
 }
 
-function getSelectedTriggers() {
-    return Array.from(document.querySelectorAll('.trigger-checkbox:checked')).map(cb => cb.value);
-}
-
-async function bulkOperation(operation, triggerIds, tagName, tagValue) {
-    // Reset cancel flag
-    cancelOperation = false;
-
-    // Show modal with progress bar
-    const progressModal = new bootstrap.Modal(document.getElementById('progressModal'));
-    const progressBar = document.querySelector('.progress-bar');
-    const progressText = document.getElementById('progressText');
-    const progressCount = document.getElementById('progressCount');
-    const progressPercent = document.getElementById('progressPercent');
-    const progressTitle = document.getElementById('progressModalTitle');
-    const cancelBtn = document.getElementById('cancelBulkBtn');
-
-    progressTitle.textContent = operation === 'add' ? 'Adding Tags' : 'Removing Tags';
-    progressText.textContent = `${operation === 'add' ? 'Adding' : 'Removing'} tag "${tagName}" ${operation === 'add' ? 'to' : 'from'} triggers...`;
-    progressCount.textContent = `0 / ${triggerIds.length}`;
-    progressPercent.textContent = '0%';
-    progressBar.style.width = '0%';
-    cancelBtn.disabled = false;
-
-    progressModal.show();
-
-    try {
-        // Process triggers in small batches to show progress
-        const batchSize = 10;
-        let processed = 0;
-        let successful = 0;
-        let failed = 0;
-
-        for (let i = 0; i < triggerIds.length; i += batchSize) {
-            // Check if operation was canceled
-            if (cancelOperation) {
-                progressModal.hide();
-                setTimeout(() => {
-                    let message = `Operation canceled. ${operation === 'add' ? 'Added' : 'Removed'} tag ${operation === 'add' ? 'to' : 'from'} ${successful} of ${triggerIds.length} triggers.`;
-                    if (failed > 0) {
-                        message += `\n${failed} triggers failed (likely discovered/read-only).`;
-                    }
-                    alert(message);
-                    location.reload();
-                }, 500);
-                return;
-            }
-
-            const batch = triggerIds.slice(i, i + batchSize);
-
-            const payload = {
-                operation: operation,
-                trigger_ids: batch,
-                tag: tagName,
-                value: tagValue
-            };
-
-            try {
-                const response = await fetch('/api/triggers/tags/bulk', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(payload)
-                });
-
-                const data = await response.json();
-                if (data.success && data.details) {
-                    successful += data.details.success_count || 0;
-                    failed += data.details.failed_count || 0;
-                } else if (data.success) {
-                    // Fallback for old format
-                    const matches = data.message.match(/(\d+)/);
-                    const batchSuccessful = matches ? parseInt(matches[1]) : 0;
-                    successful += batchSuccessful;
-                }
-
-                processed += batch.length;
-
-                // Update progress bar
-                const percent = Math.round((processed / triggerIds.length) * 100);
-                progressBar.style.width = percent + '%';
-                progressCount.textContent = `${processed} / ${triggerIds.length}`;
-                progressPercent.textContent = percent + '%';
-
-            } catch (error) {
-                console.error('Error in batch:', error);
-                processed += batch.length;
-                failed += batch.length;
-            }
-
-            // Short pause to not overload server
-            await new Promise(resolve => setTimeout(resolve, 100));
-        }
-
-        // Hide modal and show result
-        progressModal.hide();
-
-        setTimeout(() => {
-            let message = `Operation completed. ${operation === 'add' ? 'Added' : 'Removed'} tag ${operation === 'add' ? 'to' : 'from'} ${successful} triggers.`;
-            if (failed > 0) {
-                message += `\n\n${failed} triggers failed (likely discovered/read-only).`;
-            }
-            alert(message);
-            location.reload();
-        }, 500);
-
-    } catch (error) {
-        progressModal.hide();
-        console.error('Error in bulkOperation:', error);
-        setTimeout(() => {
-            alert('An error occurred during the operation');
-        }, 500);
-    }
-}
-
-// ========================================
-// CLIENT-SIDE PAGINATION
-// ========================================
-
-let currentPage = 1;
-let itemsPerPage = {{ per_page }};
-let allRows = [];
-
-// Initialize pagination on page load
-document.addEventListener('DOMContentLoaded', function() {
-    // Collect all table rows
-    allRows = Array.from(document.querySelectorAll('#triggersTable tr'));
-
-    // Initialize sort manager with callback to re-paginate after sorting
-    sortManager = new TableSortManager('triggersTable', {
-        onSort: function() {
-            // Re-collect rows after sorting (DOM order changed)
-            allRows = Array.from(document.querySelectorAll('#triggersTable tr'));
-            if (allRows.length > 0) {
-                showPage(1); // Reset to first page after sorting
-            }
-        }
-    });
-
-    // Initialize pagination
-    if (allRows.length > 0) {
-        renderPagination();
-        showPage(1);
-    }
-});
-
-// Function to show specific page
-function showPage(pageNum) {
-    currentPage = pageNum;
-
-    // Filter out hidden rows (by search/filter)
-    const visibleRows = allRows.filter(row => {
-        return row.style.display !== 'none' && row.getAttribute('data-trigger-name');
-    });
-
-    const totalVisible = visibleRows.length;
-    const totalPages = Math.ceil(totalVisible / itemsPerPage);
-
-    // Validate page number
-    if (pageNum < 1) pageNum = 1;
-    if (pageNum > totalPages && totalPages > 0) pageNum = totalPages;
-    currentPage = pageNum;
-
-    const start = (pageNum - 1) * itemsPerPage;
-    const end = start + itemsPerPage;
-
-    // Hide all rows first
-    allRows.forEach(row => {
-        if (row.getAttribute('data-trigger-name')) {
-            row.classList.add('d-none');
-        }
-    });
-
-    // Show only rows for current page
-    visibleRows.slice(start, end).forEach(row => {
-        row.classList.remove('d-none');
-    });
-
-    // Re-render pagination
-    renderPagination();
-
-    // Update checkbox state
-    updateSelectAllCheckbox();
-}
-
-// Render pagination controls
-function renderPagination() {
-    const containerTop = document.getElementById('paginationContainerTop');
-    const containerBottom = document.getElementById('paginationContainerBottom');
-
-    // Filter visible rows
-    const visibleRows = allRows.filter(row => {
-        return row.style.display !== 'none' && row.getAttribute('data-trigger-name');
-    });
-
-    const totalItems = visibleRows.length;
-    const totalPages = Math.ceil(totalItems / itemsPerPage);
-
-    // Don't show pagination if only one page or no items
-    if (totalPages <= 1) {
-        if (containerTop) containerTop.innerHTML = '';
-        if (containerBottom) containerBottom.innerHTML = '';
-        return;
-    }
-
-    const start = (currentPage - 1) * itemsPerPage + 1;
-    const end = Math.min(currentPage * itemsPerPage, totalItems);
-
-    let html = '<nav aria-label="Triggers pagination"><ul class="pagination justify-content-center">';
-
-    // Previous button
-    html += `<li class="page-item ${currentPage === 1 ? 'disabled' : ''}">
-        <a class="page-link" href="#" onclick="showPage(${currentPage - 1}); return false;">
-            <i class="fas fa-chevron-left"></i> Previous
-        </a>
-    </li>`;
-
-    // First page
-    if (currentPage > 3) {
-        html += `<li class="page-item"><a class="page-link" href="#" onclick="showPage(1); return false;">1</a></li>`;
-        if (currentPage > 4) {
-            html += '<li class="page-item disabled"><span class="page-link">...</span></li>';
-        }
-    }
-
-    // Pages around current
-    const startPage = Math.max(1, currentPage - 2);
-    const endPage = Math.min(totalPages, currentPage + 2);
-
-    for (let i = startPage; i <= endPage; i++) {
-        html += `<li class="page-item ${i === currentPage ? 'active' : ''}">
-            <a class="page-link" href="#" onclick="showPage(${i}); return false;">${i}</a>
-        </li>`;
-    }
-
-    // Last page
-    if (currentPage < totalPages - 2) {
-        if (currentPage < totalPages - 3) {
-            html += '<li class="page-item disabled"><span class="page-link">...</span></li>';
-        }
-        html += `<li class="page-item"><a class="page-link" href="#" onclick="showPage(${totalPages}); return false;">${totalPages}</a></li>`;
-    }
-
-    // Next button
-    html += `<li class="page-item ${currentPage === totalPages ? 'disabled' : ''}">
-        <a class="page-link" href="#" onclick="showPage(${currentPage + 1}); return false;">
-            Next <i class="fas fa-chevron-right"></i>
-        </a>
-    </li>`;
-
-    html += '</ul></nav>';
-
-    // Pagination info
-    html += `<div class="text-center text-muted">
-        <small id="paginationInfo">
-            Page ${currentPage} of ${totalPages}
-            (${start} - ${end} of ${totalItems} triggers)
-        </small>
-    </div>`;
-
-    // Update both containers
-    if (containerTop) containerTop.innerHTML = html;
-    if (containerBottom) containerBottom.innerHTML = html;
-}
-
-// Function to change number of items per page
 function changePerPage(newPerPage) {
-    itemsPerPage = parseInt(newPerPage);
-    const currentUrl = new URL(window.location);
-    currentUrl.searchParams.set('per_page', newPerPage);
-    window.location.href = currentUrl.toString();
+    paginationManager.changePerPage(newPerPage);
 }
 </script>
 {% endblock %}

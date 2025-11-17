@@ -247,8 +247,8 @@ class ZabbixAPI:
         # Check if tag already exists
         for tag in current_tags:
             if tag['tag'] == tag_name:
-                debug_print(f" Tag '{tag_name}' already exists")
-                return False
+                debug_print(f" Tag '{tag_name}' already exists - treating as success")
+                return True  # Tag is already present, goal achieved
 
         # Add new tag
         new_tag = {"tag": tag_name, "value": tag_value}
@@ -308,8 +308,8 @@ class ZabbixAPI:
         debug_print(f" Tags after removal: {updated_tags}")
 
         if len(updated_tags) == len(current_tags):
-            debug_print(f" Tag '{tag_name}' does not exist")
-            return False
+            debug_print(f" Tag '{tag_name}' does not exist - treating as success")
+            return True  # Tag is already absent, goal achieved
 
         # Remove 'automatic' field from tags
         clean_tags = [{"tag": tag["tag"], "value": tag["value"]} for tag in updated_tags]

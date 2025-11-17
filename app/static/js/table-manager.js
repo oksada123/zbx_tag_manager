@@ -113,8 +113,9 @@ class SelectionManager {
         let count = 0;
         let discoveredCount = 0;
 
+        // Count all selected items (ignore pagination d-none class)
         document.querySelectorAll(`#${this.tableId} tr`).forEach(row => {
-            if (row.style.display !== 'none' && !row.classList.contains('d-none')) {
+            if (row.style.display !== 'none') {
                 const checkbox = row.querySelector(`.${this.checkboxClass}`);
                 if (checkbox && checkbox.checked) {
                     count++;

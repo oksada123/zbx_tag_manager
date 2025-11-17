@@ -59,8 +59,9 @@ class SelectionManager {
     }
 
     selectAll() {
+        // Select all filtered items (ignore pagination d-none class)
         document.querySelectorAll(`#${this.tableId} tr`).forEach(row => {
-            if (row.style.display !== 'none' && !row.classList.contains('d-none')) {
+            if (row.style.display !== 'none') {
                 const checkbox = row.querySelector(`.${this.checkboxClass}`);
                 if (checkbox) {
                     checkbox.checked = true;
@@ -73,8 +74,9 @@ class SelectionManager {
     }
 
     deselectAll() {
+        // Deselect all filtered items (ignore pagination d-none class)
         document.querySelectorAll(`#${this.tableId} tr`).forEach(row => {
-            if (row.style.display !== 'none' && !row.classList.contains('d-none')) {
+            if (row.style.display !== 'none') {
                 const checkbox = row.querySelector(`.${this.checkboxClass}`);
                 if (checkbox) {
                     checkbox.checked = false;
@@ -91,8 +93,9 @@ class SelectionManager {
         if (!selectAllCheckbox) return;
 
         const shouldSelect = selectAllCheckbox.checked;
+        // Toggle all filtered items (ignore pagination d-none class)
         document.querySelectorAll(`#${this.tableId} tr`).forEach(row => {
-            if (row.style.display !== 'none' && !row.classList.contains('d-none')) {
+            if (row.style.display !== 'none') {
                 const checkbox = row.querySelector(`.${this.checkboxClass}`);
                 if (checkbox) {
                     checkbox.checked = shouldSelect;

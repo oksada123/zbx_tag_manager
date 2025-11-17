@@ -502,12 +502,19 @@ class BulkOperationsManager {
                         body: JSON.stringify(payload)
                     });
 
+                    if (!response.ok) {
+                        throw new Error(`HTTP error: ${response.status}`);
+                    }
+
                     const data = await response.json();
                     if (data.success && data.details) {
                         successful += data.details.success_count || 0;
                         failed += data.details.failed_count || 0;
                     } else if (data.success) {
                         successful += batch.length;
+                    } else {
+                        // Server returned success: false
+                        failed += batch.length;
                     }
                     processed += batch.length;
 
